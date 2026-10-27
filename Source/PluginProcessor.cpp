@@ -1,19 +1,31 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "Engine/ChordTemplateBank.h"
 #include <cmath>
 
 namespace reharm
 {
 
 TriLayerReharmAudioProcessor::TriLayerReharmAudioProcessor()
-    // Phase 9: オーディオ出力は持たず、オーディオ入力（サイドチェイン/Groove抽出用）のみを受け付けるバス構成
+    // メインのステレオオーディオ入出力（後段への完全パススルーおよびAuditionミックス用）と
+    // サイドチェイン入力（Audio Groove抽出用）を備えるバス構成
     : AudioProcessor(BusesProperties()
-                         .withInput("Audio Groove Input", juce::AudioChannelSet::stereo(), true)),
-      apvts_(*this, nullptr, "TriLayerReharmParameters", createParameterLayout())
+                         .withInput("Input", juce::AudioChannelSet::stereo(), true)
+                         .withOutput("Output", juce::AudioChannelSet::stereo(), true)
+                         .withInput("Sidechain", juce::AudioChannelSet::stereo(), true)),
+      // Phase 12: UndoManager を APVTS の第2引数へバインド
+      apvts_(*this, &undoManager_, "TriLayerReharmParameters", createParameterLayout())
 {
     modeParamPtr_       = apvts_.getRawParameterValue(ParamIDs::operatingMode);
     grooveSyncParamPtr_ = apvts_.getRawParameterValue(ParamIDs::enableGrooveSync);
+    auditionParamPtr_   = apvts_.getRawParameterValue(ParamIDs::enableAudition);
+    lengthParamPtr_     = apvts_.getRawParameterValue(ParamIDs::progressionLength);
 
+    // Phase 12: 軽量ポリフォニック Audition シンセサイザーの初期化（12ボイス）
+    engine::setupSimpleAuditionSynth(auditionSynth_, 12);
+
+    const auto initialSeq = engine::ChordTemplateBank::createPresetSequence(0, 0, false, 960.0);
+    reharmEngine_.setSourceMidiSequence(initialSeq, 960.0);
     reharmEngine_.updateRulesFromPresets(0, 0, 0);
     reharmEngine_.triggerOfflineReharmonize(true);
 }
@@ -22,18 +34,41 @@ juce::AudioProcessorValueTreeState::ParameterLayout TriLayerReharmAudioProcessor
 {
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
 
-    // 動作モード切り替えパラメーター
+    // 動作モード切り替えパラメーター（デフォルト: 0 = Bypass (Thru)）
     params.push_back(std::make_unique<juce::AudioParameterChoice>(
         juce::ParameterID { ParamIDs::operatingMode, 1 },
         "Operating Mode",
         juce::StringArray { "Bypass (Thru)", "Capture MIDI", "Playback Reharm" },
         0));
 
-    // Layer 1: Genre
+    // Phase 12: Layer 1: Genre (8ジャンルへ拡張)
     params.push_back(std::make_unique<juce::AudioParameterChoice>(
         juce::ParameterID { ParamIDs::genre, 1 },
         "Genre",
-        juce::StringArray { "Jazz", "Neo-Soul", "City Pop", "Cinematic" },
+        juce::StringArray {
+            "Jazz",
+            "Neo-Soul",
+            "City Pop",
+            "Cinematic",
+            "Lo-Fi",
+            "Modern R&B",
+            "Gospel",
+            "8-Bit (Chiptune)"
+        },
+        0));
+
+    // Phase 12: ジャンル内コード進行プリセット選択 (0〜3、Undo/Redo対象)
+    params.push_back(std::make_unique<juce::AudioParameterChoice>(
+        juce::ParameterID { ParamIDs::progressionPreset, 1 },
+        "Progression Preset",
+        juce::StringArray { "Preset 1", "Preset 2", "Preset 3", "Preset 4" },
+        0));
+
+    // Phase 14: プリセットコード進行の長さ選択 ("4 Bars", "8 Bars")
+    params.push_back(std::make_unique<juce::AudioParameterChoice>(
+        juce::ParameterID { ParamIDs::progressionLength, 1 },
+        "Progression Length",
+        juce::StringArray { "4 Bars", "8 Bars" },
         0));
 
     // Layer 2: Artist
@@ -64,6 +99,12 @@ juce::AudioProcessorValueTreeState::ParameterLayout TriLayerReharmAudioProcessor
         "Audio Groove Sync",
         false));
 
+    // Phase 12: Audition (Preview) 内部シンセ再生トグル
+    params.push_back(std::make_unique<juce::AudioParameterBool>(
+        juce::ParameterID { ParamIDs::enableAudition, 1 },
+        "Audition (Preview)",
+        false));
+
     return { params.begin(), params.end() };
 }
 
@@ -89,7 +130,7 @@ bool TriLayerReharmAudioProcessor::isMidiEffect() const
 
 double TriLayerReharmAudioProcessor::getTailLengthSeconds() const
 {
-    return 0.0;
+    return 0.25;
 }
 
 int TriLayerReharmAudioProcessor::getNumPrograms()
@@ -124,13 +165,18 @@ void TriLayerReharmAudioProcessor::prepareToPlay(double sampleRate, int samplesP
     fastEnvelope_ = 0.0f;
     slowEnvelope_ = 0.0f;
     cooldownSamplesRemaining_ = 0;
+    debugSampleCounter_ = 0;
+    auditionPlayheadPpq_ = 0.0;
+    wasAuditionActive_ = false;
 
     reharmEngine_.prepare(sampleRate_, samplesPerBlock);
+    auditionSynth_.setCurrentPlaybackSampleRate(sampleRate_);
 }
 
 void TriLayerReharmAudioProcessor::releaseResources()
 {
     reharmEngine_.reset();
+    auditionSynth_.allNotesOff(0, false);
 }
 
 bool TriLayerReharmAudioProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const
@@ -138,25 +184,31 @@ bool TriLayerReharmAudioProcessor::isBusesLayoutSupported(const BusesLayout& lay
     const auto inSet  = layouts.getMainInputChannelSet();
     const auto outSet = layouts.getMainOutputChannelSet();
 
-    // 出力バスが Disabled で、入力（サイドチェイン）が Disabled / Mono / Stereo の構成を優先許可
-    const bool validInput = (inSet.isDisabled()
-                             || inSet == juce::AudioChannelSet::mono()
-                             || inSet == juce::AudioChannelSet::stereo());
+    const bool validIn = (inSet.isDisabled()
+                          || inSet == juce::AudioChannelSet::mono()
+                          || inSet == juce::AudioChannelSet::stereo());
+    const bool validOut = (outSet.isDisabled()
+                           || outSet == juce::AudioChannelSet::mono()
+                           || outSet == juce::AudioChannelSet::stereo());
 
-    if (outSet.isDisabled() && validInput)
-        return true;
-
-    // ホスト側がダミーの出力バスを要求する場合のフォールバック互換性
-    if (inSet == outSet && validInput)
-        return true;
-
-    return false;
+    return validIn && validOut;
 }
 
 void TriLayerReharmAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
                                                 juce::MidiBuffer& midiMessages)
 {
     juce::ScopedNoDenormals noDenormals;
+
+    const int numSamples = buffer.getNumSamples();
+
+    // 1秒に1回程度の頻度で生存確認ログ（Audio Samples数とMIDI Events数）を出力
+    debugSampleCounter_ += numSamples;
+    if (debugSampleCounter_ >= static_cast<int>(sampleRate_))
+    {
+        debugSampleCounter_ = 0;
+        DBG("processBlock called: Audio Samples=" << numSamples
+            << ", MIDI Events=" << midiMessages.getNumEvents());
+    }
 
     if (modeParamPtr_ != nullptr)
     {
@@ -168,23 +220,109 @@ void TriLayerReharmAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
                                    && (grooveSyncParamPtr_->load(std::memory_order_relaxed) >= 0.5f);
     reharmEngine_.setGrooveSyncEnabled(grooveSyncEnabled);
 
+    const bool auditionEnabled = (auditionParamPtr_ != nullptr)
+                                 && (auditionParamPtr_->load(std::memory_order_relaxed) >= 0.5f);
+
     juce::Optional<juce::AudioPlayHead::PositionInfo> posInfo;
     if (auto* currentPlayHead = getPlayHead())
     {
         posInfo = currentPlayHead->getPosition();
     }
 
-    // 1. 入力オーディオ（サイドチェイン）からトランジェントを検出し GrooveMap を更新
-    if (buffer.getNumChannels() > 0 && buffer.getNumSamples() > 0)
+    // 1. サイドチェイン入力（有効な場合）またはメイン入力からトランジェントを検出し GrooveMap を更新
+    if (getBusCount(true) > 1 && getBus(true, 1)->isEnabled())
+    {
+        auto sidechainBuffer = getBusBuffer(buffer, true, 1);
+        if (sidechainBuffer.getNumChannels() > 0 && numSamples > 0)
+        {
+            detectTransientsAndRecordGroove(sidechainBuffer, posInfo);
+        }
+    }
+    else if (buffer.getNumChannels() > 0 && numSamples > 0)
     {
         detectTransientsAndRecordGroove(buffer, posInfo);
     }
 
-    // 2. オーディオ出力は行わないためバッファをクリア
-    buffer.clear();
+    // 2. オーディオ信号の完全パススルー処理（絶対に buffer.clear() で全体を消去しない）
+    auto mainInput  = getBusBuffer(buffer, true, 0);
+    auto mainOutput = getBusBuffer(buffer, false, 0);
+    const int numInChannels  = mainInput.getNumChannels();
+    const int numOutChannels = mainOutput.getNumChannels();
 
-    // 3. MIDIブロック処理
-    reharmEngine_.processMidiBlock(midiMessages, posInfo, buffer.getNumSamples());
+    for (int ch = 0; ch < numOutChannels; ++ch)
+    {
+        if (ch < numInChannels)
+        {
+            if (mainOutput.getWritePointer(ch) != mainInput.getReadPointer(ch))
+            {
+                mainOutput.copyFrom(ch, 0, mainInput, ch, 0, numSamples);
+            }
+        }
+        else if (numInChannels == 1)
+        {
+            mainOutput.copyFrom(ch, 0, mainInput, 0, 0, numSamples);
+        }
+        else
+        {
+            mainOutput.clear(ch, 0, numSamples);
+        }
+    }
+
+    // 3. MIDIのスルー＆ブロック処理（midiMessages 内のリアルタイムイベントを .clear() せずそのまま後段へ維持）
+    reharmEngine_.processMidiBlock(midiMessages, posInfo, numSamples);
+
+    // 4. Phase 12 & 14: Audition (Preview) 内部シンセ再生ルーティング（4小節=16.0 PPQ / 8小節=32.0 PPQ 対応）
+    if (auditionEnabled && numOutChannels > 0 && numSamples > 0)
+    {
+        const bool isEightBars = (lengthParamPtr_ != nullptr)
+                                 && (lengthParamPtr_->load(std::memory_order_relaxed) >= 0.5f);
+        const double kLoopLengthPpq = isEightBars ? 32.0 : 16.0;
+        const bool hostPlaying = posInfo.hasValue() && posInfo->getIsPlaying();
+        const double rawBpm    = posInfo.hasValue() ? posInfo->getBpm().orFallback(120.0) : 120.0;
+        const double safeBpm   = rawBpm > 10.0 ? rawBpm : 120.0;
+        const double ppqPerSample = (safeBpm / 60.0) / sampleRate_;
+        const double blockDurationPpq = static_cast<double>(numSamples) * ppqPerSample;
+
+        double currentStartPpq = 0.0;
+        if (hostPlaying)
+        {
+            currentStartPpq = std::fmod(std::max(0.0, posInfo->getPpqPosition().orFallback(0.0)), kLoopLengthPpq);
+            auditionPlayheadPpq_ = std::fmod(currentStartPpq + blockDurationPpq, kLoopLengthPpq);
+        }
+        else
+        {
+            if (!wasAuditionActive_)
+            {
+                auditionPlayheadPpq_ = 0.0;
+            }
+            currentStartPpq = auditionPlayheadPpq_;
+            auditionPlayheadPpq_ = std::fmod(auditionPlayheadPpq_ + blockDurationPpq, kLoopLengthPpq);
+        }
+
+        // ONに切り替わった直後の先頭ノート取りこぼし防止
+        if (!wasAuditionActive_ && currentStartPpq < 0.05)
+        {
+            currentStartPpq = 0.0;
+        }
+        wasAuditionActive_ = true;
+
+        juce::MidiBuffer auditionMidi;
+        reharmEngine_.extractAuditionMidiForBlock(
+            auditionMidi,
+            currentStartPpq,
+            blockDurationPpq,
+            ppqPerSample,
+            numSamples
+        );
+
+        // パススルー済みの mainOutput に対して内部シンセの音声を加算ミックス
+        auditionSynth_.renderNextBlock(mainOutput, auditionMidi, 0, numSamples);
+    }
+    else if (wasAuditionActive_)
+    {
+        wasAuditionActive_ = false;
+        auditionSynth_.allNotesOff(0, true);
+    }
 }
 
 void TriLayerReharmAudioProcessor::detectTransientsAndRecordGroove(
@@ -194,13 +332,11 @@ void TriLayerReharmAudioProcessor::detectTransientsAndRecordGroove(
     const int numChannels = buffer.getNumChannels();
     const int numSamples  = buffer.getNumSamples();
 
-    // 高速エンベロープ（アタック約1.5ms / リリース約25ms）と低速エンベロープ（アタック約25ms / リリース約150ms）
     const float fastAttackCoeff  = std::exp(-1.0f / static_cast<float>(sampleRate_ * 0.0015));
     const float fastReleaseCoeff = std::exp(-1.0f / static_cast<float>(sampleRate_ * 0.0250));
     const float slowAttackCoeff  = std::exp(-1.0f / static_cast<float>(sampleRate_ * 0.0250));
     const float slowReleaseCoeff = std::exp(-1.0f / static_cast<float>(sampleRate_ * 0.1500));
 
-    // チャタリング（1つの打音で複数回反応すること）を防ぐホールドオフ時間（約75ms）
     const int minHoldoffSamples = static_cast<int>(sampleRate_ * 0.075);
 
     const bool isPlaying = posInfo.hasValue() && posInfo->getIsPlaying();
@@ -208,25 +344,22 @@ void TriLayerReharmAudioProcessor::detectTransientsAndRecordGroove(
     const double bpm           = posInfo.hasValue() ? posInfo->getBpm().orFallback(120.0) : 120.0;
     const double ppqPerSample  = (bpm / 60.0) / sampleRate_;
 
-    constexpr float kNoiseFloor      = 0.025f; // -32dB 相当の最小ノイズゲート
-    constexpr float kTransientRatio  = 2.35f;  // 急激な立ち上がり判定比率 (fast / slow)
+    constexpr float kNoiseFloor     = 0.025f;
+    constexpr float kTransientRatio = 2.35f;
 
     for (int s = 0; s < numSamples; ++s)
     {
-        // 全入力チャンネルの絶対値ピークを取得
         float absSample = 0.0f;
         for (int ch = 0; ch < numChannels; ++ch)
         {
             absSample = std::max(absSample, std::abs(buffer.getSample(ch, s)));
         }
 
-        // Fast Envelope 更新
         if (absSample > fastEnvelope_)
             fastEnvelope_ = fastAttackCoeff * fastEnvelope_ + (1.0f - fastAttackCoeff) * absSample;
         else
             fastEnvelope_ = fastReleaseCoeff * fastEnvelope_ + (1.0f - fastReleaseCoeff) * absSample;
 
-        // Slow Envelope 更新
         if (absSample > slowEnvelope_)
             slowEnvelope_ = slowAttackCoeff * slowEnvelope_ + (1.0f - slowAttackCoeff) * absSample;
         else
@@ -238,7 +371,6 @@ void TriLayerReharmAudioProcessor::detectTransientsAndRecordGroove(
             continue;
         }
 
-        // トランジェント発火判定
         if (fastEnvelope_ > kNoiseFloor && fastEnvelope_ > (slowEnvelope_ * kTransientRatio + 0.015f))
         {
             cooldownSamplesRemaining_ = minHoldoffSamples;
@@ -261,7 +393,6 @@ float TriLayerReharmAudioProcessor::consumeTransientVisualPulse() noexcept
     const float current = transientVisualPulse_.load(std::memory_order_relaxed);
     if (current > 0.001f)
     {
-        // 緩やかに減衰させる
         transientVisualPulse_.store(current * 0.72f, std::memory_order_relaxed);
     }
     return current;

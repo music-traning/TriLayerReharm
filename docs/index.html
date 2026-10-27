@@ -1,0 +1,1494 @@
+<!DOCTYPE html>
+<html lang="ja" class="dark scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TriLayerReharm | Universal Make Associates (U.M.A) — Official LP &amp; User Manual</title>
+  <meta name="description" content="白玉コードを、インスピレーションの暴風雨に変える。Genre × Artist × Environment の3層レイヤー、動的パッシングコード挿入、Viterbiアルゴリズムで再構築するオフラインMIDIリハーモナイズVST3プラグイン。" />
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Google Fonts: Inter, Noto Sans JP, JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+JP:wght@400;500;700;900&display=swap" rel="stylesheet">
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Inter"', '"Noto Sans JP"', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          colors: {
+            daw: {
+              bg: '#07080c',
+              panel: '#0f121a',
+              card: '#131722',
+              border: '#23293a',
+              amber: '#ff8c24',
+              purple: '#a855f7',
+              cyan: '#06b6d4',
+              crimson: '#f43f5e',
+              emerald: '#10b981',
+              gold: '#facc15',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    :root {
+      --orb-primary: #ff8c24;
+      --orb-secondary: #a855f7;
+      --orb-tertiary: #06b6d4;
+      --orb-speed: 14s;
+      --orb-chaos-scale: 1;
+    }
+
+    body {
+      background-color: #07080c;
+      color: #f1f5f9;
+      overflow-x: hidden;
+    }
+
+    /* DAW Grid Background */
+    .bg-daw-grid {
+      background-size: 40px 40px;
+      background-image: 
+        linear-gradient(to right, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+    }
+
+    /* ==========================================================================
+       Tri-Layer Orb Animations (radial-gradient + keyframes)
+       ========================================================================== */
+    @keyframes orbRotateClockwise {
+      0% { transform: rotate(0deg) scale(1); }
+      33% { transform: rotate(120deg) scale(1.06) skewX(3deg); }
+      66% { transform: rotate(240deg) scale(0.96) skewY(-3deg); }
+      100% { transform: rotate(360deg) scale(1); }
+    }
+
+    @keyframes orbRotateCounter {
+      0% { transform: rotate(360deg) scale(1); }
+      50% { transform: rotate(180deg) scale(1.12); }
+      100% { transform: rotate(0deg) scale(1); }
+    }
+
+    @keyframes orbCorePulse {
+      0%, 100% {
+        transform: scale(1);
+        filter: drop-shadow(0 0 28px var(--orb-primary));
+      }
+      50% {
+        transform: scale(1.09);
+        filter: drop-shadow(0 0 50px var(--orb-secondary));
+      }
+    }
+
+    @keyframes atmosphereMorph {
+      0%, 100% {
+        border-radius: 50% 50% 50% 50% / 50% 50% 50% 50%;
+      }
+      25% {
+        border-radius: 58% 42% 63% 37% / 44% 59% 41% 56%;
+      }
+      50% {
+        border-radius: 41% 59% 45% 55% / 61% 38% 62% 39%;
+      }
+      75% {
+        border-radius: 62% 38% 52% 48% / 39% 63% 37% 61%;
+      }
+    }
+
+    /* Layer 3: Atmosphere (Environment) */
+    .orb-atmosphere {
+      background: radial-gradient(
+        circle at 50% 50%,
+        rgba(6, 182, 212, 0.32) 0%,
+        rgba(168, 85, 247, 0.24) 42%,
+        rgba(255, 140, 36, 0.10) 68%,
+        transparent 82%
+      );
+      animation: atmosphereMorph 10s ease-in-out infinite, orbRotateClockwise 22s linear infinite;
+      filter: blur(22px);
+    }
+
+    /* Layer 2: Orbit Ring (Artist) */
+    .orb-ring-outer {
+      border: 2px dashed rgba(6, 182, 212, 0.55);
+      box-shadow: 0 0 30px rgba(6, 182, 212, 0.2), inset 0 0 25px rgba(168, 85, 247, 0.2);
+      animation: atmosphereMorph 7s ease-in-out infinite reverse, orbRotateCounter var(--orb-speed) linear infinite;
+    }
+
+    .orb-ring-inner {
+      border: 3px solid transparent;
+      background:
+        linear-gradient(#07080c, #07080c) padding-box,
+        conic-gradient(from 0deg, var(--orb-primary), var(--orb-secondary), var(--orb-tertiary), transparent 75%, var(--orb-primary)) border-box;
+      animation: atmosphereMorph 6s ease-in-out infinite, orbRotateClockwise calc(var(--orb-speed) * 0.65) linear infinite;
+    }
+
+    /* Layer 1: Core (Genre) */
+    .orb-core {
+      background: radial-gradient(
+        circle at 35% 32%,
+        #ffffff 0%,
+        var(--orb-primary) 28%,
+        var(--orb-secondary) 68%,
+        #090b10 100%
+      );
+      animation: orbCorePulse 4s ease-in-out infinite, atmosphereMorph 8s ease-in-out infinite;
+    }
+
+    /* CTA Button Neon Glow */
+    .cta-glow {
+      background: linear-gradient(135deg, #ff8c24 0%, #a855f7 52%, #06b6d4 100%);
+      background-size: 200% 200%;
+      transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+      box-shadow: 0 0 25px rgba(168, 85, 247, 0.38), 0 0 55px rgba(6, 182, 212, 0.18);
+    }
+    .cta-glow:hover {
+      background-position: 100% 50%;
+      transform: translateY(-2px) scale(1.02);
+      box-shadow: 0 0 35px rgba(255, 140, 36, 0.65), 0 0 70px rgba(168, 85, 247, 0.55), 0 0 110px rgba(6, 182, 212, 0.4);
+    }
+
+    /* Feature Card Hover Border */
+    .feature-card {
+      background: linear-gradient(180deg, rgba(19, 23, 34, 0.85) 0%, rgba(12, 15, 23, 0.95) 100%);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      transition: all 0.3s ease;
+    }
+    .feature-card:hover {
+      border-color: rgba(168, 85, 247, 0.5);
+      transform: translateY(-4px);
+      box-shadow: 0 16px 40px -12px rgba(168, 85, 247, 0.22);
+    }
+
+    /* Custom Range Slider */
+    input[type="range"].mutation-slider {
+      -webkit-appearance: none;
+      appearance: none;
+      height: 8px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #ff8c24 0%, #a855f7 50%, #f43f5e 100%);
+      outline: none;
+    }
+    input[type="range"].mutation-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #ffffff;
+      border: 3px solid #f43f5e;
+      cursor: pointer;
+      box-shadow: 0 0 14px rgba(244, 63, 94, 0.9);
+    }
+
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #07080c;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #23293a;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #38bdf8;
+    }
+  </style>
+</head>
+
+<body class="bg-daw-bg bg-daw-grid font-sans antialiased selection:bg-daw-purple selection:text-white">
+
+  <!-- ========================================================================
+       HEADER / NAVIGATION
+       ======================================================================== -->
+  <header class="fixed top-0 left-0 right-0 z-50 backdrop-blur-md bg-daw-bg/85 border-b border-white/10">
+    <div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-3.5 h-3.5 rounded-full bg-gradient-to-tr from-daw-amber via-daw-purple to-daw-cyan animate-pulse"></div>
+        <span class="font-mono font-bold tracking-wider text-sm md:text-base text-white">
+          TRI-LAYER REHARM <span class="text-xs font-normal text-slate-400 ml-1">VST3 / Standalone</span>
+        </span>
+      </div>
+      <nav class="hidden lg:flex items-center gap-7 text-sm text-slate-300">
+        <a href="#interactive-preview" class="hover:text-daw-amber transition-colors">Live Simulator</a>
+        <a href="#features" class="hover:text-daw-cyan transition-colors">Features</a>
+        <a href="#preset-bank" class="hover:text-daw-gold transition-colors">32 Presets &amp; 8-Bar</a>
+        <a href="#under-the-hood" class="hover:text-daw-purple transition-colors">Algorithm</a>
+        <a href="#user-manual" class="px-3 py-1 rounded-md bg-white/5 border border-white/10 text-white hover:border-daw-cyan transition-colors font-semibold">
+          📖 User Manual
+        </a>
+        <a href="#about-uma" class="hover:text-white transition-colors">About U.M.A</a>
+      </nav>
+      <a href="https://github.com/music-traning/TriLayerReharm/releases" target="_blank" rel="noopener noreferrer"
+         class="px-4 py-1.5 rounded-full text-xs font-mono font-semibold border border-daw-cyan/50 text-daw-cyan hover:bg-daw-cyan/10 transition">
+        v1.0.0 (Phase 14)
+      </a>
+    </div>
+  </header>
+
+  <!-- ========================================================================
+       1. HERO SECTION
+       ======================================================================== -->
+  <section class="relative pt-32 pb-20 md:pt-40 md:pb-28 overflow-hidden">
+    <!-- Background Ambient Glows -->
+    <div class="pointer-events-none absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[680px] h-[680px] rounded-full bg-gradient-to-tr from-daw-amber/10 via-daw-purple/15 to-daw-cyan/10 blur-3xl"></div>
+
+    <div class="max-w-7xl mx-auto px-6 relative z-10">
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+
+        <!-- Left Column: Hero Copy & CTA -->
+        <div class="lg:col-span-7 text-left space-y-6">
+          <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-daw-card border border-white/10 text-xs font-mono text-slate-300">
+            <span class="w-2 h-2 rounded-full bg-daw-emerald animate-ping"></span>
+            <span class="text-daw-amber font-semibold">Universal Make Associates</span> Signature Series — Phase 14 Complete
+          </div>
+
+          <h1 class="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight leading-[1.15]">
+            <span class="block text-white">白玉コードを、</span>
+            <span class="bg-gradient-to-r from-daw-amber via-daw-purple to-daw-cyan bg-clip-text text-transparent">
+              インスピレーションの暴風雨に変える。
+            </span>
+          </h1>
+
+          <p class="text-base sm:text-lg text-slate-300 leading-relaxed max-w-2xl">
+            TriLayerReharmは、DAW上の退屈なMIDIリージョンを<span class="text-white font-semibold">「Genre(理論) × Artist(手癖) × Environment(情景)」</span>の3層レイヤーで再解釈し、<span class="text-daw-cyan font-semibold">動的パッシングコード（裏コード・セカンダリードミナント）の自動挿入</span>と<span class="text-daw-purple font-semibold">Viterbi探索</span>で極上のボイシングへ再構築するオフラインMIDIリハーモナイズ・プラグインです。
+          </p>
+
+          <!-- CTA Buttons -->
+          <div class="pt-3 flex flex-wrap items-center gap-4">
+            <a href="https://github.com/music-traning/TriLayerReharm/releases"
+               target="_blank" rel="noopener noreferrer"
+               class="cta-glow inline-flex items-center gap-3 px-8 py-4 rounded-xl font-bold text-white text-base tracking-wide">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V3" />
+              </svg>
+              <span>Download for Windows (VST3)</span>
+            </a>
+
+            <a href="#user-manual"
+               class="inline-flex items-center gap-2 px-6 py-4 rounded-xl font-mono text-sm text-white bg-daw-card hover:bg-white/10 border border-daw-cyan/40 transition">
+              <span>📖 取扱説明書・マニュアルを読む</span>
+            </a>
+
+            <a href="https://github.com/music-traning/TriLayerReharm"
+               target="_blank" rel="noopener noreferrer"
+               class="inline-flex items-center gap-2 px-5 py-4 rounded-xl font-mono text-sm text-slate-300 bg-daw-card hover:bg-white/5 border border-white/10 transition">
+              <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                <path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" />
+              </svg>
+              <span>GitHub</span>
+            </a>
+          </div>
+
+          <!-- Specs pills -->
+          <div class="pt-3 flex flex-wrap gap-x-6 gap-y-2 text-xs font-mono text-slate-400">
+            <div class="flex items-center gap-2">
+              <span class="text-daw-amber">●</span> 8 Genres × 4 Presets = 32 Bank (4 Bars &amp; 8 Bars)
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-daw-crimson">●</span> Auto Passing Chords (Tritone Sub / Secondary Dom)
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-daw-cyan">●</span> Built-in 12-Voice EP Audition Synth &amp; Full Pass-Through
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Column: The Animated Tri-Layer Orb Visual -->
+        <div class="lg:col-span-5 flex flex-col items-center justify-center">
+          <div id="hero-orb-container" class="relative w-80 h-80 sm:w-96 sm:h-96 flex items-center justify-center">
+            <!-- Layer 3: Atmosphere (Environment) -->
+            <div id="orb-atmosphere" class="orb-atmosphere absolute inset-0 rounded-full"></div>
+
+            <!-- Layer 2: Outer & Inner Orbiting Rings (Artist) -->
+            <div id="orb-ring-outer" class="orb-ring-outer absolute w-64 h-64 sm:w-76 sm:h-76 rounded-full"></div>
+            <div id="orb-ring-inner" class="orb-ring-inner absolute w-48 h-48 sm:w-56 sm:h-56 rounded-full"></div>
+
+            <!-- Layer 1: Core (Genre) -->
+            <div id="orb-core" class="orb-core relative w-28 h-28 sm:w-32 sm:h-32 rounded-full flex items-center justify-center">
+              <span id="orb-chord-readout" class="font-mono font-bold text-sm sm:text-base text-white tracking-wider drop-shadow text-center px-2">
+                Dbmaj9(#11)
+              </span>
+            </div>
+
+            <!-- Floating Telemetry HUD Badges -->
+            <div class="absolute top-3 left-3 px-2.5 py-1 rounded bg-daw-panel/90 border border-white/10 font-mono text-[11px] text-daw-amber">
+              CORE: <span id="hud-genre">JAZZ (Drop2)</span>
+            </div>
+            <div class="absolute top-3 right-3 px-2.5 py-1 rounded bg-daw-panel/90 border border-white/10 font-mono text-[11px] text-daw-cyan">
+              LENGTH: <span id="hud-length">8 BARS</span>
+            </div>
+            <div class="absolute bottom-3 left-3 px-2.5 py-1 rounded bg-daw-panel/90 border border-white/10 font-mono text-[11px] text-daw-emerald flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-daw-emerald animate-ping"></span>
+              PASSING CHORDS: <span id="hud-passing">ACTIVE</span>
+            </div>
+            <div class="absolute bottom-3 right-3 px-2.5 py-1 rounded bg-daw-panel/90 border border-white/10 font-mono text-[11px] text-daw-crimson">
+              MUTATION: <span id="hud-mutation">55%</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================================================================
+       INTERACTIVE PLUGIN SIMULATOR BAR (8 Genres + 4/8 Bars + Passing Chords)
+       ======================================================================== -->
+  <section id="interactive-preview" class="py-10 border-y border-white/10 bg-daw-panel/80 backdrop-blur">
+    <div class="max-w-7xl mx-auto px-6 space-y-6">
+      <div class="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
+        <div class="space-y-1">
+          <div class="flex items-center gap-3">
+            <span class="px-2.5 py-1 rounded bg-daw-purple/20 border border-daw-purple/40 font-mono text-xs text-daw-purple font-bold">
+              INTERACTIVE ENGINE SIMULATOR
+            </span>
+            <span class="text-xs font-mono text-slate-400">Phase 12–14 Live Preview</span>
+          </div>
+          <p class="text-sm text-slate-300">
+            8種のジャンル・小節数（4 Bars / 8 Bars）・Mutationスライダーを操作して、<strong class="text-white">動的パッシングコード分割（裏コード挿入）</strong>とピアノロールの変化を体験してください。
+          </p>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-3 w-full lg:w-auto justify-end">
+          <!-- Genre Selector (8 Genres) -->
+          <div class="flex items-center gap-2 bg-daw-card px-3 py-2 rounded-lg border border-white/10">
+            <label for="sim-genre" class="text-xs font-mono text-slate-400">GENRE:</label>
+            <select id="sim-genre" class="bg-transparent text-xs font-mono font-bold text-white focus:outline-none cursor-pointer">
+              <option value="jazz" class="bg-daw-panel">01. Jazz (Drop2)</option>
+              <option value="neosoul" class="bg-daw-panel">02. Neo-Soul (Cluster)</option>
+              <option value="citypop" class="bg-daw-panel">03. City Pop (Drop2)</option>
+              <option value="cinematic" class="bg-daw-panel">04. Cinematic (Spread)</option>
+              <option value="lofi" class="bg-daw-panel">05. Lo-Fi (Warm Close)</option>
+              <option value="modernrnb" class="bg-daw-panel">06. Modern R&amp;B (Lush 9/11)</option>
+              <option value="gospel" class="bg-daw-panel">07. Gospel (Chromatic)</option>
+              <option value="chip" class="bg-daw-panel">08. 8-Bit (Chiptune)</option>
+            </select>
+          </div>
+
+          <!-- Length Selector (4 Bars / 8 Bars) -->
+          <div class="flex items-center gap-2 bg-daw-card px-3 py-2 rounded-lg border border-daw-cyan/40">
+            <label for="sim-length" class="text-xs font-mono text-daw-cyan">LENGTH:</label>
+            <select id="sim-length" class="bg-transparent text-xs font-mono font-bold text-white focus:outline-none cursor-pointer">
+              <option value="4" class="bg-daw-panel">4 Bars</option>
+              <option value="8" selected class="bg-daw-panel">8 Bars (Expanded)</option>
+            </select>
+          </div>
+
+          <!-- Mutation Slider -->
+          <div class="flex items-center gap-3 bg-daw-card px-4 py-2 rounded-lg border border-white/10 flex-1 sm:flex-initial min-w-[260px]">
+            <label for="sim-mutation" class="text-xs font-mono text-daw-crimson font-bold whitespace-nowrap">
+              MUTATION:
+            </label>
+            <input id="sim-mutation" type="range" min="0" max="100" value="55" class="mutation-slider w-full" />
+            <span id="sim-mutation-val" class="text-xs font-mono text-white w-10 text-right">55%</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Simulated Piano Roll & Harmonic Rhythm Subdivision Bar -->
+      <div class="rounded-xl bg-[#090b10] border border-white/10 p-4 font-mono">
+        <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400 border-b border-white/10 pb-2.5 mb-3">
+          <div class="flex items-center gap-3">
+            <span id="sim-preset-title" class="text-white font-bold">PRESET (8 BARS): [Jazz] 1. Standard 2-5-1-6 + Backdoor Turnaround</span>
+          </div>
+          <div class="flex items-center gap-4 text-[11px]">
+            <span class="flex items-center gap-1.5">
+              <span class="inline-block w-2.5 h-2.5 rounded-sm bg-daw-amber"></span> Base Voicing
+            </span>
+            <span class="flex items-center gap-1.5">
+              <span class="inline-block w-2.5 h-2.5 rounded-sm bg-daw-crimson"></span> Inserted Passing Chord (Tritone Sub / V7)
+            </span>
+            <span id="sim-subdiv-status" class="px-2 py-0.5 rounded bg-daw-crimson/20 text-daw-crimson font-bold">
+              Sub-Division: Selective (Cadence Approach)
+            </span>
+          </div>
+        </div>
+
+        <!-- Dynamic Chord Blocks Timeline -->
+        <div id="sim-timeline-grid" class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
+          <!-- Populated dynamically by JS -->
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================================================================
+       2. 8つのコア機能 (FEATURES - U.M.A SIGNATURE)
+       ======================================================================== -->
+  <section id="features" class="py-24 md:py-32 relative">
+    <div class="max-w-7xl mx-auto px-6">
+      <!-- Section Header -->
+      <div class="text-center max-w-3xl mx-auto mb-16 space-y-4">
+        <p class="font-mono text-xs uppercase tracking-[0.25em] text-daw-cyan">
+          ⚡ U.M.A Signature Architecture (Phases 1 – 14)
+        </p>
+        <h2 class="text-3xl sm:text-4xl font-black text-white tracking-tight">
+          8つのコア機能
+        </h2>
+        <p class="text-slate-400 text-sm sm:text-base">
+          音楽理論の数学的最適化、動的パッシングコード分割、そしてトラックメイカーの身体感覚（グルーヴ）を直結させる武器。
+        </p>
+      </div>
+
+      <!-- Features Grid (8 Cards) -->
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+
+        <!-- Feature 1: The Tri-Layer Engine -->
+        <div class="feature-card rounded-2xl p-6 flex flex-col justify-between relative overflow-hidden">
+          <div class="space-y-3.5">
+            <div class="w-11 h-11 rounded-xl bg-daw-amber/15 border border-daw-amber/40 flex items-center justify-center text-daw-amber">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+              </svg>
+            </div>
+            <div class="font-mono text-[11px] text-daw-amber">01 / TRI-LAYER MATRIX</div>
+            <h3 class="text-lg font-bold text-white">The Tri-Layer Engine</h3>
+            <p class="text-slate-300 text-sm leading-relaxed">
+              <strong class="text-white">理論×手癖×情景の3層合成。</strong><br />
+              8種のGenre（理論）、4種のArtist（ストラムや手癖）、3種のEnvironment（音域・声部数制限）を掛け合わせ、Viterbi探索で最適ボイシングを導出。
+            </p>
+          </div>
+          <div class="mt-5 pt-3 border-t border-white/5 flex items-center justify-between text-xs font-mono text-slate-500">
+            <span>8 × 4 × 3 Profiles</span>
+            <span class="text-daw-amber">Drop2 / Spread</span>
+          </div>
+        </div>
+
+        <!-- Feature 2: Dynamic Harmonic Rhythm & Passing Chords (Phase 13) -->
+        <div class="feature-card rounded-2xl p-6 flex flex-col justify-between relative overflow-hidden border-daw-crimson/30">
+          <div class="space-y-3.5">
+            <div class="w-11 h-11 rounded-xl bg-daw-crimson/15 border border-daw-crimson/40 flex items-center justify-center text-daw-crimson">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h10m-10 6h16" />
+              </svg>
+            </div>
+            <div class="font-mono text-[11px] text-daw-crimson">02 / DYNAMIC PASSING CHORDS</div>
+            <h3 class="text-lg font-bold text-white">Harmonic Rhythm 分割</h3>
+            <p class="text-slate-300 text-sm leading-relaxed">
+              <strong class="text-white">白玉を割り、裏コードを差し込む。</strong><br />
+              2拍を超える長いコードを自動検出し、直後のターゲットコードへ半音で滑り込む「裏コード（bII7）」や「セカンダリードミナント」を自動逆算して挿入。
+            </p>
+          </div>
+          <div class="mt-5 pt-3 border-t border-white/5 flex items-center justify-between text-xs font-mono text-slate-500">
+            <span>Target Back-Calc</span>
+            <span class="text-daw-crimson">Tritone Sub Chain</span>
+          </div>
+        </div>
+
+        <!-- Feature 3: 32 Presets & 8-Bar Expansion (Phase 12 & 14) -->
+        <div class="feature-card rounded-2xl p-6 flex flex-col justify-between relative overflow-hidden">
+          <div class="space-y-3.5">
+            <div class="w-11 h-11 rounded-xl bg-daw-gold/15 border border-daw-gold/40 flex items-center justify-center text-daw-gold">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+              </svg>
+            </div>
+            <div class="font-mono text-[11px] text-daw-gold">03 / 32 PRESET BANK (4 &amp; 8 BARS)</div>
+            <h3 class="text-lg font-bold text-white">8ジャンル×32進行＋8小節展開</h3>
+            <p class="text-slate-300 text-sm leading-relaxed">
+              <strong class="text-white">後半でエモく展開する8小節構成。</strong><br />
+              全32種の定番進行に「4 Bars」と「8 Bars」を搭載。8小節版は単なる反復ではなく、5〜8小節目でサブドミナントマイナーやターンアラウンドへ劇的に展開。
+            </p>
+          </div>
+          <div class="mt-5 pt-3 border-t border-white/5 flex items-center justify-between text-xs font-mono text-slate-500">
+            <span>SDM &amp; Turnarounds</span>
+            <span class="text-daw-gold">4 Bars / 8 Bars</span>
+          </div>
+        </div>
+
+        <!-- Feature 4: Audio Groove Sync -->
+        <div class="feature-card rounded-2xl p-6 flex flex-col justify-between relative overflow-hidden">
+          <div class="space-y-3.5">
+            <div class="w-11 h-11 rounded-xl bg-daw-cyan/15 border border-daw-cyan/40 flex items-center justify-center text-daw-cyan">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3 12h3l3-9 4 18 3-9h5" />
+              </svg>
+            </div>
+            <div class="font-mono text-[11px] text-daw-cyan">04 / SIDECHAIN TRANSIENT LOCK</div>
+            <h3 class="text-lg font-bold text-white">Audio Groove Sync</h3>
+            <p class="text-slate-300 text-sm leading-relaxed">
+              <strong class="text-white">ドラムのノリに、MIDIが吸い付く。</strong><br />
+              サイドチェイン入力されたオーディオからトランジェントを検出し、生成MIDIの発音タイミングをドラムのポケットへ完全吸着。
+            </p>
+          </div>
+          <div class="mt-5 pt-3 border-t border-white/5 flex items-center justify-between text-xs font-mono text-slate-500">
+            <span>Dual-Envelope</span>
+            <span class="text-daw-cyan">PPQ GrooveMap</span>
+          </div>
+        </div>
+
+        <!-- Feature 5: Mutation Slider -->
+        <div class="feature-card rounded-2xl p-6 flex flex-col justify-between relative overflow-hidden">
+          <div class="space-y-3.5">
+            <div class="w-11 h-11 rounded-xl bg-daw-crimson/15 border border-daw-crimson/40 flex items-center justify-center text-daw-crimson">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+            </div>
+            <div class="font-mono text-[11px] text-daw-crimson">05 / CHAOS COST MODULATOR</div>
+            <h3 class="text-lg font-bold text-white">Mutation Slider</h3>
+            <p class="text-slate-300 text-sm leading-relaxed">
+              <strong class="text-white">0%の端正な和声から100%の狂気へ。</strong><br />
+              ボイシングのテンション許容度・クラスターボーナス・さらに拍の分割密度（裏コードの連続挿入）までを1本のスライダーで連続変調。
+            </p>
+          </div>
+          <div class="mt-5 pt-3 border-t border-white/5 flex items-center justify-between text-xs font-mono text-slate-500">
+            <span>0% Safe → 100% Bebop</span>
+            <span class="text-daw-crimson">Altered / Cluster</span>
+          </div>
+        </div>
+
+        <!-- Feature 6: Built-in Audition Synth & Full Pass-Through -->
+        <div class="feature-card rounded-2xl p-6 flex flex-col justify-between relative overflow-hidden">
+          <div class="space-y-3.5">
+            <div class="w-11 h-11 rounded-xl bg-daw-emerald/15 border border-daw-emerald/40 flex items-center justify-center text-daw-emerald">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+              </svg>
+            </div>
+            <div class="font-mono text-[11px] text-daw-emerald">06 / AUDITION EP SYNTH &amp; THRU</div>
+            <h3 class="text-lg font-bold text-white">内部プレビューシンセ＆完全スルー</h3>
+            <p class="text-slate-300 text-sm leading-relaxed">
+              <strong class="text-white">単体でも鳴る。後段のシンセも止めない。</strong><br />
+              12ボイスの軽量エレピ音源を内蔵しワンクリックで試聴可能。通常時はMIDI・Audioともに100%完全パススルーし、後段のSpire等を妨げません。
+            </p>
+          </div>
+          <div class="mt-5 pt-3 border-t border-white/5 flex items-center justify-between text-xs font-mono text-slate-500">
+            <span>12-Voice Poly EP</span>
+            <span class="text-daw-emerald">Zero-Mute Thru</span>
+          </div>
+        </div>
+
+        <!-- Feature 7: Drag & Drop + Undo/Redo -->
+        <div class="feature-card rounded-2xl p-6 flex flex-col justify-between relative overflow-hidden">
+          <div class="space-y-3.5">
+            <div class="w-11 h-11 rounded-xl bg-daw-purple/15 border border-daw-purple/40 flex items-center justify-center text-daw-purple">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+              </svg>
+            </div>
+            <div class="font-mono text-[11px] text-daw-purple">07 / D&amp;D IO &amp; UNDO/REDO</div>
+            <h3 class="text-lg font-bold text-white">双方向D&amp;D ＆ 履歴管理</h3>
+            <p class="text-slate-300 text-sm leading-relaxed">
+              <strong class="text-white">投げて、試して、DAWへ戻す。</strong><br />
+              `.mid` ファイルのD&amp;Dインポートと、DAWタイムラインへの直接D&amp;Dエクスポートに対応。`Ctrl+Z` / `Ctrl+Y` による完全なUndo/Redo履歴も搭載。
+            </p>
+          </div>
+          <div class="mt-5 pt-3 border-t border-white/5 flex items-center justify-between text-xs font-mono text-slate-500">
+            <span>Ctrl+Z / Ctrl+Y</span>
+            <span class="text-daw-purple">Bidirectional .mid</span>
+          </div>
+        </div>
+
+        <!-- Feature 8: Realtime Chord Analyzer -->
+        <div class="feature-card rounded-2xl p-6 flex flex-col justify-between relative overflow-hidden">
+          <div class="space-y-3.5">
+            <div class="w-11 h-11 rounded-xl bg-daw-cyan/15 border border-daw-cyan/40 flex items-center justify-center text-daw-cyan">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2z" />
+              </svg>
+            </div>
+            <div class="font-mono text-[11px] text-daw-cyan">08 / PITCH CLASS PARSER</div>
+            <h3 class="text-lg font-bold text-white">Realtime Chord Analyzer</h3>
+            <p class="text-slate-300 text-sm leading-relaxed">
+              <strong class="text-white">複雑な響きの正体を即座に可視化。</strong><br />
+              生成されたボイシングや挿入された裏コードの構成音を逆解析し、<code class="text-daw-amber font-mono">Db9(#11)</code> 等のピル型コードバッジをピアノロール上にリアルタイム表示。
+            </p>
+          </div>
+          <div class="mt-5 pt-3 border-t border-white/5 flex items-center justify-between text-xs font-mono text-slate-500">
+            <span>9, b9, #9, #11, b13</span>
+            <span class="text-daw-cyan">Slash Chords</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================================================================
+       3. 8 GENRES × 4 PROGRESSIONS = 32 PRESET BANK SHOWCASE
+       ======================================================================== -->
+  <section id="preset-bank" class="py-24 border-t border-white/10 bg-daw-panel/30">
+    <div class="max-w-7xl mx-auto px-6">
+      <div class="text-center max-w-3xl mx-auto mb-14 space-y-4">
+        <p class="font-mono text-xs uppercase tracking-[0.25em] text-daw-gold">
+          🎹 Phase 12 &amp; 14: 32 Curated Progression Templates
+        </p>
+        <h2 class="text-3xl sm:text-4xl font-black text-white tracking-tight">
+          8ジャンル × 4進行 ＝ 全32種のプリセットバンク
+        </h2>
+        <p class="text-slate-400 text-sm sm:text-base">
+          すべてのプリセットが <strong class="text-white">4 Bars（基本進行）</strong> と <strong class="text-daw-cyan">8 Bars（後半でサブドミナントマイナーやターンアラウンドへ展開する拡張版）</strong> の両方に対応しています。
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 font-mono text-xs">
+        <!-- 0: Jazz -->
+        <div class="rounded-xl bg-daw-card border border-daw-amber/30 p-5 space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-sm font-bold text-daw-amber">01. JAZZ</span>
+            <span class="px-2 py-0.5 rounded bg-daw-amber/15 text-daw-amber text-[10px]">Drop2 / Tritone Sub</span>
+          </div>
+          <ul class="space-y-1.5 text-slate-300">
+            <li>1. Standard 2-5-1-6 <span class="text-slate-500">(Dm7-G7-Cmaj7-A7)</span></li>
+            <li>2. Minor 2-5-1 Turnaround</li>
+            <li>3. Take The A-Train <span class="text-slate-500">(II7 #11)</span></li>
+            <li>4. Rhythm Changes Bridge</li>
+          </ul>
+          <p class="text-[11px] text-slate-400 pt-2 border-t border-white/5 font-sans">
+            8小節版ではバックドア進行（Fm7→Bb7）やIII-VI-II-Vターンアラウンドへ展開。
+          </p>
+        </div>
+
+        <!-- 1: Neo-Soul -->
+        <div class="rounded-xl bg-daw-card border border-daw-purple/30 p-5 space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-sm font-bold text-daw-purple">02. NEO-SOUL</span>
+            <span class="px-2 py-0.5 rounded bg-daw-purple/15 text-daw-purple text-[10px]">Close Cluster</span>
+          </div>
+          <ul class="space-y-1.5 text-slate-300">
+            <li>1. Smooth Walkdown 4-3-2-1</li>
+            <li>2. Erykah Chromatic Slide</li>
+            <li>3. D'Angelo Pocket <span class="text-slate-500">(Gm7-C7-Fmaj7)</span></li>
+            <li>4. Glasper Modal Shift</li>
+          </ul>
+          <p class="text-[11px] text-slate-400 pt-2 border-t border-white/5 font-sans">
+            短2度のクラスター（半音ぶつかり）を美学として許容し、後半でモーダルシフトを展開。
+          </p>
+        </div>
+
+        <!-- 2: City Pop -->
+        <div class="rounded-xl bg-daw-card border border-pink-500/30 p-5 space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-sm font-bold text-pink-400">03. CITY POP</span>
+            <span class="px-2 py-0.5 rounded bg-pink-500/15 text-pink-400 text-[10px]">Polished Drop2</span>
+          </div>
+          <ul class="space-y-1.5 text-slate-300">
+            <li>1. Just The Two of Us</li>
+            <li>2. Royal Road 4-5-3-6 <span class="text-slate-500">(王道進行)</span></li>
+            <li>3. Sunset Highway SDM</li>
+            <li>4. Tokyo Bay Night Breeze</li>
+          </ul>
+          <p class="text-[11px] text-slate-400 pt-2 border-t border-white/5 font-sans">
+            8小節版では王道進行の後半で切ないサブドミナントマイナー（Fm7→Bb7）へ展開。
+          </p>
+        </div>
+
+        <!-- 3: Cinematic -->
+        <div class="rounded-xl bg-daw-card border border-daw-emerald/30 p-5 space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-sm font-bold text-daw-emerald">04. CINEMATIC</span>
+            <span class="px-2 py-0.5 rounded bg-daw-emerald/15 text-daw-emerald text-[10px]">Wide Spread</span>
+          </div>
+          <ul class="space-y-1.5 text-slate-300">
+            <li>1. Pedal Sus4 Horizon</li>
+            <li>2. Epic Minor Lift</li>
+            <li>3. Interstellar Lydian</li>
+            <li>4. Descending Line Cliche</li>
+          </ul>
+          <p class="text-[11px] text-slate-400 pt-2 border-t border-white/5 font-sans">
+            ペダルポイントからの壮大な離陸や、8小節完結のクリシェ・ラインを構築。
+          </p>
+        </div>
+
+        <!-- 4: Lo-Fi -->
+        <div class="rounded-xl bg-daw-card border border-amber-500/30 p-5 space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-sm font-bold text-amber-400">05. LO-FI</span>
+            <span class="px-2 py-0.5 rounded bg-amber-500/15 text-amber-400 text-[10px]">Warm Nostalgic</span>
+          </div>
+          <ul class="space-y-1.5 text-slate-300">
+            <li>1. Rainy Study Beats</li>
+            <li>2. Late Night Nostalgia</li>
+            <li>3. Cassette Tape Loop</li>
+            <li>4. Dusty Vinyl Jazzhop</li>
+          </ul>
+          <p class="text-[11px] text-slate-400 pt-2 border-t border-white/5 font-sans">
+            柔らかなベロシティとルートレス9th/13thボイシングでノスタルジックなループを生成。
+          </p>
+        </div>
+
+        <!-- 5: Modern R&B -->
+        <div class="rounded-xl bg-daw-card border border-indigo-500/30 p-5 space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-sm font-bold text-indigo-400">06. MODERN R&amp;B</span>
+            <span class="px-2 py-0.5 rounded bg-indigo-500/15 text-indigo-400 text-[10px]">Lush 9th / 11th</span>
+          </div>
+          <ul class="space-y-1.5 text-slate-300">
+            <li>1. Slow Jam 2-5-1-4</li>
+            <li>2. Silk Smooth Bounce</li>
+            <li>3. Trapsoul Nocturne</li>
+            <li>4. Velvet Floating Chords</li>
+          </ul>
+          <p class="text-[11px] text-slate-400 pt-2 border-t border-white/5 font-sans">
+            浮遊感のあるm11・maj9と、後半のマイナーII-V解決で艶やかなR&amp;Bハーモニーを実現。
+          </p>
+        </div>
+
+        <!-- 6: Gospel -->
+        <div class="rounded-xl bg-daw-card border border-daw-gold/30 p-5 space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-sm font-bold text-daw-gold">07. GOSPEL</span>
+            <span class="px-2 py-0.5 rounded bg-daw-gold/15 text-daw-gold text-[10px]">Chromatic Passing</span>
+          </div>
+          <ul class="space-y-1.5 text-slate-300">
+            <li>1. Sunday Morning Walkup</li>
+            <li>2. Praise Plagal Cadence</li>
+            <li>3. Soulful Turnaround</li>
+            <li>4. Hallelujah Passing Dim7</li>
+          </ul>
+          <p class="text-[11px] text-slate-400 pt-2 border-t border-white/5 font-sans">
+            パッシング・ディミニッシュ（#dim7 / bIII dim7）とアーメン終止（IVm→I）を網羅。
+          </p>
+        </div>
+
+        <!-- 7: 8-Bit (Chiptune) -->
+        <div class="rounded-xl bg-daw-card border border-green-500/30 p-5 space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-sm font-bold text-green-400">08. 8-BIT (CHIPTUNE)</span>
+            <span class="px-2 py-0.5 rounded bg-green-500/15 text-green-400 text-[10px]">Tight Triads / 7th</span>
+          </div>
+          <ul class="space-y-1.5 text-slate-300">
+            <li>1. Heroic Overworld</li>
+            <li>2. Boss Battle Minor Cliche</li>
+            <li>3. Starlight Ending Theme</li>
+            <li>4. Cyber Dungeon Andalusian</li>
+          </ul>
+          <p class="text-[11px] text-slate-400 pt-2 border-t border-white/5 font-sans">
+            不要なテンション濁りを抑えたクリアな3〜4声で、王道JRPG風の8小節展開を構築。
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================================================================
+       4. UNDER THE HOOD (Phase 13 Sub-Division + Viterbi Algorithm)
+       ======================================================================== -->
+  <section id="under-the-hood" class="py-24 border-t border-white/10 bg-daw-panel/40">
+    <div class="max-w-7xl mx-auto px-6">
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+
+        <!-- Left Description -->
+        <div class="lg:col-span-5 space-y-6">
+          <div class="inline-flex items-center gap-2 px-3 py-1 rounded bg-daw-purple/15 border border-daw-purple/40 font-mono text-xs text-daw-purple">
+            <span>DSP / ALGORITHM ARCHITECTURE</span>
+          </div>
+
+          <h2 class="text-3xl sm:text-4xl font-black text-white tracking-tight font-mono">
+            Dynamic Sub-Division &amp;<br />
+            <span class="bg-gradient-to-r from-daw-amber via-daw-purple to-daw-cyan bg-clip-text text-transparent">
+              Viterbi Trellis Search
+            </span>
+          </h2>
+
+          <p class="text-slate-300 text-base leading-relaxed">
+            単なるコード置換辞書ではありません。Phase 13で搭載された<strong class="text-white">和声リズム動的分割エンジン</strong>は、2拍を超える白玉コードを検出し、直後のターゲットコードのルート音から逆算して<strong class="text-daw-crimson">裏コード（Tritone Substitution: bII7）</strong>や<strong class="text-daw-amber">セカンダリードミナント（V7/target）</strong>を自動生成して差し込みます。
+          </p>
+          <p class="text-slate-300 text-base leading-relaxed">
+            さらに分割されたパッシングコードを含む全時間ステップを<strong class="text-daw-cyan">Viterbiアルゴリズム（動的計画法）</strong>のトレリスへ統合し、曲全体を通して最も声部移動が滑らかなボイシング経路を一瞬で数学的に決定します。
+          </p>
+
+          <ul class="space-y-3 text-xs sm:text-sm font-mono text-slate-400 pt-2">
+            <li class="flex items-center gap-3">
+              <span class="text-daw-crimson font-bold">[PHASE 13]</span>
+              <span>Harmonic Rhythm Sub-Division &amp; Target Root Back-Calculation</span>
+            </li>
+            <li class="flex items-center gap-3">
+              <span class="text-daw-amber font-bold">[STEP 01]</span>
+              <span>Backtracking &amp; Hard-Limit Pruning (Low Interval Limit)</span>
+            </li>
+            <li class="flex items-center gap-3">
+              <span class="text-daw-purple font-bold">[STEP 02]</span>
+              <span>Static + Transition Voice-Leading Cost Evaluation</span>
+            </li>
+            <li class="flex items-center gap-3">
+              <span class="text-daw-cyan font-bold">[STEP 03]</span>
+              <span>Global Optimum Trellis Backtracking across 4 or 8 Bars</span>
+            </li>
+          </ul>
+        </div>
+
+        <!-- Right Terminal / C++20 Code Window -->
+        <div class="lg:col-span-7">
+          <div class="rounded-2xl bg-[#090b10] border border-white/15 shadow-2xl overflow-hidden font-mono text-xs sm:text-sm">
+            <!-- Terminal Top Bar -->
+            <div class="px-4 py-3 bg-[#121621] border-b border-white/10 flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="w-3 h-3 rounded-full bg-daw-crimson/80"></span>
+                <span class="w-3 h-3 rounded-full bg-daw-amber/80"></span>
+                <span class="w-3 h-3 rounded-full bg-daw-emerald/80"></span>
+                <span class="ml-2 text-xs text-slate-400">Source/Engine/MidiReharmonizerEngine.cpp — C++20</span>
+              </div>
+              <span class="text-[11px] text-daw-cyan">Phase 13 + Viterbi Trellis</span>
+            </div>
+
+            <!-- Code Content -->
+            <pre class="p-6 overflow-x-auto leading-relaxed text-slate-300"><code><span class="text-slate-500">// Phase 13: 長いコードブロックを動的に分割し、直後のターゲットへ向かう裏コード(bII7)/V7を逆算挿入</span>
+<span class="text-daw-cyan">ChordBlock</span> MidiReharmonizerEngine::<span class="text-daw-amber">computeApproachChordForTarget</span>(
+    <span class="text-daw-purple">const</span> <span class="text-daw-cyan">ChordBlock</span>&amp; sourceBlock, <span class="text-daw-purple">int</span> targetRootPc, <span class="text-daw-purple">double</span> startPpq, <span class="text-daw-purple">double</span> durPpq, <span class="text-daw-purple">bool</span> tritoneSub)
+{
+    <span class="text-daw-cyan">ChordBlock</span> approach = sourceBlock;
+    approach.startPpq       = startPpq;
+    approach.durationPpq    = durPpq;
+    approach.isPassingChord = <span class="text-daw-purple">true</span>;
+    <span class="text-slate-500">// 裏コード (target + 1半音 = bII7) または セカンダリードミナント (target + 7半音 = V7)</span>
+    approach.rootPitchClass = <span class="text-daw-amber">normalizePitchClass</span>(targetRootPc + (tritoneSub ? <span class="text-daw-amber">1</span> : <span class="text-daw-amber">7</span>));
+    approach.quality        = ChordQuality::<span class="text-daw-cyan">Dominant7</span>;
+    <span class="text-daw-purple">return</span> approach;
+}
+
+<span class="text-slate-500">// パッシングコードを含む全時間ステップを Viterbi トレリスへ統合して最適ボイシング経路を探索</span>
+<span class="text-daw-purple">bool</span> MidiReharmonizerEngine::<span class="text-daw-amber">triggerOfflineReharmonize</span>(<span class="text-daw-purple">bool</span> usePreviewIfEmpty)
+{
+    progression = <span class="text-daw-amber">subdivideAndInsertPassingChords</span>(progression, profileCopy);
+    <span class="text-daw-purple">const auto</span> optimalVoicings = <span class="text-daw-amber">findOptimalVoicingPath</span>(progression, profileCopy);
+    reharmonizedSequence_ = <span class="text-daw-amber">renderVoicingPathToMidiEvents</span>(progression, optimalVoicings, profileCopy);
+    <span class="text-daw-purple">return true</span>;
+}</code></pre>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================================================================
+       5. USER MANUAL & REFERENCE GUIDE (取扱説明書・完全マニュアル)
+       ======================================================================== -->
+  <section id="user-manual" class="py-24 md:py-32 border-t border-white/10 relative">
+    <div class="max-w-7xl mx-auto px-6 space-y-20">
+
+      <!-- Manual Header -->
+      <div class="text-center max-w-3xl mx-auto space-y-4">
+        <div class="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-daw-cyan/15 border border-daw-cyan/40 font-mono text-xs text-daw-cyan font-bold">
+          📖 OFFICIAL USER MANUAL &amp; WORKFLOW GUIDE
+        </div>
+        <h2 class="text-3xl sm:text-4xl font-black text-white tracking-tight">
+          TriLayerReharm 取扱説明書
+        </h2>
+        <p class="text-slate-400 text-sm sm:text-base">
+          インストールからDAWでのルーティング、各パラメーターの詳細仕様、裏コード自動挿入の使いこなしまでを網羅した公式マニュアルです。
+        </p>
+      </div>
+
+      <!-- STEP-BY-STEP WORKFLOW (4 STEPS) -->
+      <div class="space-y-8">
+        <div class="flex items-center gap-3 border-b border-white/10 pb-3">
+          <span class="font-mono text-sm font-bold text-daw-amber">SECTION 01</span>
+          <h3 class="text-xl sm:text-2xl font-bold text-white">クイックスタート・ワークフロー（基本の4ステップ）</h3>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <!-- Step 1 -->
+          <div class="rounded-2xl bg-daw-card border border-white/10 p-6 space-y-3">
+            <div class="flex items-center justify-between font-mono text-xs">
+              <span class="px-2.5 py-1 rounded bg-daw-amber/20 text-daw-amber font-bold">STEP 01</span>
+              <span class="text-slate-500">Insert &amp; Sound</span>
+            </div>
+            <h4 class="text-base font-bold text-white">プラグインの立ち上げと試聴</h4>
+            <p class="text-xs sm:text-sm text-slate-300 leading-relaxed">
+              DAWのインストゥルメントトラック（またはMIDIエフェクトスロット）に <code class="text-daw-amber font-mono">TriLayerReharm</code> をインサートします。<br />
+              右下の <strong class="text-daw-gold">「Audition (Preview)」</strong> をONにすると、内蔵の12ボイス・エレピ音源が即座にリハーモナイズ結果をループ再生します。
+            </p>
+          </div>
+
+          <!-- Step 2 -->
+          <div class="rounded-2xl bg-daw-card border border-white/10 p-6 space-y-3">
+            <div class="flex items-center justify-between font-mono text-xs">
+              <span class="px-2.5 py-1 rounded bg-daw-cyan/20 text-daw-cyan font-bold">STEP 02</span>
+              <span class="text-slate-500">Load Progression</span>
+            </div>
+            <h4 class="text-base font-bold text-white">コード進行の選択 または D&amp;D</h4>
+            <p class="text-xs sm:text-sm text-slate-300 leading-relaxed">
+              <strong class="text-daw-cyan">8ジャンル × 4進行（32種）</strong>からプリセットを選び、<strong class="text-white">LENGTH（4 Bars / 8 Bars）</strong>を切り替えます。<br />
+              または、手持ちの <code class="text-daw-cyan font-mono">.mid</code> ファイルをプラグイン画面へ直接ドラッグ＆ドロップして読み込ませることも可能です。
+            </p>
+          </div>
+
+          <!-- Step 3 -->
+          <div class="rounded-2xl bg-daw-card border border-white/10 p-6 space-y-3">
+            <div class="flex items-center justify-between font-mono text-xs">
+              <span class="px-2.5 py-1 rounded bg-daw-crimson/20 text-daw-crimson font-bold">STEP 03</span>
+              <span class="text-slate-500">Tri-Layer &amp; Mutation</span>
+            </div>
+            <h4 class="text-base font-bold text-white">3層レイヤーとMutationの調整</h4>
+            <p class="text-xs sm:text-sm text-slate-300 leading-relaxed">
+              <strong class="text-white">Genre・Artist・Environment</strong> を選び、<strong class="text-daw-crimson">Mutationスライダー</strong>を動かします。<br />
+              30%を超えると長いコードが自動分割されて裏コードが挿入され、80%〜100%ではバップ風の連続アプローチコードへと進化します。
+            </p>
+          </div>
+
+          <!-- Step 4 -->
+          <div class="rounded-2xl bg-daw-card border border-white/10 p-6 space-y-3">
+            <div class="flex items-center justify-between font-mono text-xs">
+              <span class="px-2.5 py-1 rounded bg-daw-purple/20 text-daw-purple font-bold">STEP 04</span>
+              <span class="text-slate-500">Drag to DAW</span>
+            </div>
+            <h4 class="text-base font-bold text-white">DAWタイムラインへD&amp;D書き出し</h4>
+            <p class="text-xs sm:text-sm text-slate-300 leading-relaxed">
+              理想のボイシングができたら、ピアノロール右上の <strong class="text-daw-amber">「DRAG MIDI TO DAW」</strong> バッジ（またはピアノロール領域）をドラッグし、DAWのお好きなシンセトラック（Spire、Keyscape等）へ直接ドロップします。
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- SECTION 02: PARAMETER & UI CONTROL REFERENCE -->
+      <div class="space-y-8">
+        <div class="flex items-center gap-3 border-b border-white/10 pb-3">
+          <span class="font-mono text-sm font-bold text-daw-cyan">SECTION 02</span>
+          <h3 class="text-xl sm:text-2xl font-bold text-white">UIコントロール＆パラメーター詳細リファレンス</h3>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <!-- Left Table: Layers & Presets -->
+          <div class="rounded-2xl bg-daw-card border border-white/10 overflow-hidden">
+            <div class="px-6 py-4 bg-white/5 border-b border-white/10 font-mono text-xs font-bold text-daw-amber">
+              3-LAYER &amp; PRESET CONTROLS (左パネル上段〜中段)
+            </div>
+            <div class="p-6 space-y-5 text-xs sm:text-sm">
+              <div>
+                <div class="font-mono font-bold text-white flex items-center justify-between">
+                  <span>Undo / Redo ボタン</span>
+                  <span class="text-xs text-daw-cyan">Shortcut: Ctrl+Z / Ctrl+Y (Cmd+Shift+Z)</span>
+                </div>
+                <p class="text-slate-400 mt-1">
+                  すべてのパラメーター操作、Mutationスライダー、プリセット切り替えの履歴を前後に辿ることができます。
+                </p>
+              </div>
+
+              <div class="border-t border-white/5 pt-4">
+                <div class="font-mono font-bold text-daw-amber">LAYER 1 : GENRE (8 GENRES)</div>
+                <p class="text-slate-400 mt-1">
+                  和声理論の骨格（優先ボイシングスタイル、ルート省略許容度、短2度クラスター許容度、裏コード解禁有無）を決定します。<br />
+                  <span class="text-slate-300 font-mono text-xs">選択肢: Jazz / Neo-Soul / City Pop / Cinematic / Lo-Fi / Modern R&amp;B / Gospel / 8-Bit</span>
+                </p>
+              </div>
+
+              <div class="border-t border-white/5 pt-4">
+                <div class="font-mono font-bold text-daw-cyan">PROGRESSION PRESET (32 BANK) &amp; LENGTH (4 Bars / 8 Bars)</div>
+                <p class="text-slate-400 mt-1">
+                  選択中のジャンルに最適化された4種のコード進行プリセットを読み込みます。右隣の <strong class="text-white">LENGTH</strong> を <code class="text-daw-cyan font-mono">8 Bars</code> にすると、5〜8小節目でサブドミナントマイナーやターンアラウンドを含む8小節構成へ拡張されます。
+                </p>
+              </div>
+
+              <div class="border-t border-white/5 pt-4">
+                <div class="font-mono font-bold text-daw-purple">LAYER 2 : ARTIST (ORBIT)</div>
+                <p class="text-slate-400 mt-1">
+                  演奏者の「手癖」とボイスリーディング重みを設定します：
+                </p>
+                <ul class="mt-1.5 space-y-1 text-slate-300 font-mono text-xs">
+                  <li>・<strong>Artist A:</strong> Smooth &amp; Tight（声部移動を最小化する端正な連結）</li>
+                  <li>・<strong>Artist B:</strong> Wide Expressive Strum（18msの豊かなアルペジオ・ストラム）</li>
+                  <li>・<strong>Artist C:</strong> Rhythmic Drunk Groove（J Dilla風の14msタイミング揺らぎ）</li>
+                  <li>・<strong>Artist D:</strong> Minimal &amp; Precise（揺らぎを抑えた精密なトップノート追従）</li>
+                </ul>
+              </div>
+
+              <div class="border-t border-white/5 pt-4">
+                <div class="font-mono font-bold text-daw-emerald">LAYER 3 : ENVIRONMENT (ATMOSPHERE)</div>
+                <p class="text-slate-400 mt-1">
+                  音域レンジ（MIDIノート下限・上限）、同時発音声部数（3〜5声）、および低音域の濁りを防ぐ <strong class="text-white">Low Interval Limit</strong> を制御します：
+                </p>
+                <ul class="mt-1.5 space-y-1 text-slate-300 font-mono text-xs">
+                  <li>・<strong>Rainy:</strong> 中高音域フォーカス（C3〜C6 / 繊細な4声ボイシング）</li>
+                  <li>・<strong>VHS:</strong> ローファイ・ミッドレンジ（A2〜E5 / 温かみのある3〜4声）</li>
+                  <li>・<strong>Deep Space:</strong> ワイドレンジ（D2〜D6 / 重厚な4〜5声スプレッド）</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right Table: Mutation, Modes, Groove Sync & Audition -->
+          <div class="rounded-2xl bg-daw-card border border-white/10 overflow-hidden">
+            <div class="px-6 py-4 bg-white/5 border-b border-white/10 font-mono text-xs font-bold text-daw-crimson">
+              MUTATION, HARMONIC RHYTHM &amp; ROUTING CONTROLS (左パネル下段)
+            </div>
+            <div class="p-6 space-y-5 text-xs sm:text-sm">
+              <div>
+                <div class="font-mono font-bold text-daw-crimson">MUTATION SLIDER (0.0% 〜 100.0%)</div>
+                <p class="text-slate-400 mt-1">
+                  和声の過激さと、<strong class="text-white">Phase 13 和声リズム分割（パッシングコード挿入）</strong>の密度を同時にコントロールします：
+                </p>
+                <div class="mt-2.5 space-y-2 font-mono text-xs">
+                  <div class="p-2.5 rounded bg-black/40 border border-white/5">
+                    <span class="text-daw-amber font-bold">0% 〜 30% (Basic / Safe):</span>
+                    <span class="text-slate-300 block font-sans mt-0.5">拍の分割は行わず元の和声リズムを維持。テンションや代理コードを抑えたクリーンなDrop2/基本ボイシングを生成。</span>
+                  </div>
+                  <div class="p-2.5 rounded bg-black/40 border border-white/5">
+                    <span class="text-daw-purple font-bold">30% 〜 70% (Advanced / Musical):</span>
+                    <span class="text-slate-300 block font-sans mt-0.5">9th/11th/13thテンションを解禁。4小節に1〜2箇所の解決ポイント（ツーファイブやターンアラウンド）を自動選別して分割し、裏コード（bII7）やセカンダリードミナントを粋に挿入。</span>
+                  </div>
+                  <div class="p-2.5 rounded bg-black/40 border border-daw-crimson/30">
+                    <span class="text-daw-crimson font-bold">70% 〜 100% (Chaos / Bebop Chain):</span>
+                    <span class="text-slate-300 block font-sans mt-0.5">オルタードテンション（b9, #9, #11, b13）と半音クラスターにボーナスを付与。すべての長い白玉コードを分割し、80%〜100%では1小節を3〜4拍に細分化して「裏コードのさらに裏」まで連鎖挿入。</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="border-t border-white/5 pt-4">
+                <div class="font-mono font-bold text-white">OPERATING MODE (動作モード)</div>
+                <ul class="mt-1.5 space-y-1 text-slate-300 font-mono text-xs">
+                  <li>・<strong>Bypass (Thru):</strong> 入力されたMIDIとAudioをそのまま後段のシンセへ完全スルーします（D&amp;Dワークフロー時の標準モード）。</li>
+                  <li>・<strong>Capture MIDI:</strong> DAW再生中に入力されたリアルタイムMIDI演奏を内部バッファへ記録します（スルー出力も維持）。</li>
+                  <li>・<strong>Playback Reharm:</strong> リハーモナイズ済みのMIDIシーケンスをDAWの再生位置（PPQ）に同期して後段のシンセへ直接送出します。</li>
+                </ul>
+              </div>
+
+              <div class="border-t border-white/5 pt-4">
+                <div class="font-mono font-bold text-daw-emerald">Groove Sync トグル ＆ Audition (Preview) トグル</div>
+                <ul class="mt-1.5 space-y-1.5 text-slate-400">
+                  <li>
+                    <strong class="text-daw-emerald font-mono">Groove Sync:</strong> サイドチェイン（またはメインAudio入力）のトランジェント（ドラムのアタック）を解析し、環境レイヤーのヒューマナイズよりも優先してノート発音位置をドラムのポケットへ吸着させます。
+                  </li>
+                  <li>
+                    <strong class="text-daw-gold font-mono">Audition (Preview):</strong> 内蔵の12ボイス・ポリフォニック・エレピ音源をONにします。DAW停止中でもプラグイン単体で4小節/8小節のループ試聴が可能です。
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SECTION 03: DAW ROUTING & FAQ -->
+      <div class="space-y-8">
+        <div class="flex items-center gap-3 border-b border-white/10 pb-3">
+          <span class="font-mono text-sm font-bold text-daw-purple">SECTION 03</span>
+          <h3 class="text-xl sm:text-2xl font-bold text-white">DAWルーティング・ガイド ＆ よくある質問 (FAQ)</h3>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div class="rounded-2xl bg-daw-card border border-white/10 p-6 space-y-3">
+            <div class="font-mono text-xs text-daw-amber font-bold">Q1. Spire等の外部シンセと一緒に使うには？</div>
+            <h4 class="text-base font-bold text-white">完全パススルー設計で共存可能</h4>
+            <p class="text-xs sm:text-sm text-slate-300 leading-relaxed">
+              TriLayerReharmは入力されたオーディオおよびリアルタイムMIDI信号を一切ミュートせず後段へ完全スルーします。<br />
+              ① <strong class="text-white">D&amp;D方式:</strong> ピアノロール右上の <code class="text-daw-amber font-mono">DRAG MIDI TO DAW</code> からSpire等のトラックへMIDIをドロップ。<br />
+              ② <strong class="text-white">リアルタイム送出:</strong> Operating Modeを <code class="text-daw-cyan font-mono">Playback Reharm</code> にすると、DAW再生に同期して後段へリハーモナイズMIDIを送出します。
+            </p>
+          </div>
+
+          <div class="rounded-2xl bg-daw-card border border-white/10 p-6 space-y-3">
+            <div class="font-mono text-xs text-daw-cyan font-bold">Q2. プラグイン単体で音を鳴らせますか？</div>
+            <h4 class="text-base font-bold text-white">Audition (Preview) をONにするだけ</h4>
+            <p class="text-xs sm:text-sm text-slate-300 leading-relaxed">
+              左パネル最下段の <strong class="text-daw-gold">「Audition (Preview)」</strong> チェックボックスをONにすると、内蔵のエレピシンセが即座にリハーモナイズ結果を演奏します。<br />
+              DAWのトランスポートが停止している状態でも、内部クロックによって4小節（または8小節）のコード進行を自動ループ再生するため、プリセット選びやMutationの試行錯誤がプラグイン単体で完結します。
+            </p>
+          </div>
+
+          <div class="rounded-2xl bg-daw-card border border-white/10 p-6 space-y-3">
+            <div class="font-mono text-xs text-daw-emerald font-bold">Q3. インストール先とシステム要件は？</div>
+            <h4 class="text-base font-bold text-white">Windows 64-bit VST3 標準対応</h4>
+            <p class="text-xs sm:text-sm text-slate-300 leading-relaxed">
+              インストーラー（またはビルドスクリプト）により、WindowsのVST3標準パスへ配置されます：<br />
+              <code class="block mt-1.5 p-2 rounded bg-black/60 text-daw-cyan font-mono text-[11px] break-all">
+                C:\Program Files\Common Files\VST3\TriLayerReharm.vst3
+              </code>
+              <span class="block mt-2 text-slate-400 text-xs">
+                対応OS: Windows 10 / 11 (64-bit)<br />
+                対応ホスト: Cubase, Studio One, Ableton Live, FL Studio, Reaper 等
+              </span>
+            </p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ========================================================================
+       6. ABOUT U.M.A & FOOTER
+       ======================================================================== -->
+  <section id="about-uma" class="py-24 border-t border-white/10 relative overflow-hidden">
+    <div class="max-w-4xl mx-auto px-6 text-center space-y-6 relative z-10">
+      <div class="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-white/5 border border-white/10 font-mono text-xs text-daw-amber">
+        UNIVERSAL MAKE ASSOCIATES (U.M.A)
+      </div>
+
+      <h2 class="text-3xl sm:text-4xl font-black text-white tracking-tight">
+        狂ったアイデアを、実用的なPoCへ。
+      </h2>
+
+      <p class="text-slate-300 text-base sm:text-lg leading-relaxed max-w-2xl mx-auto">
+        Universal Make Associates (U.M.A) は、音楽理論の視覚化やAI/DSPを用いた次世代ツールの探求を行う開発ラボです。
+      </p>
+
+      <div class="pt-4 flex flex-wrap justify-center gap-4">
+        <a href="https://note.com/jazzy_begin"
+           target="_blank" rel="noopener noreferrer"
+           class="inline-flex items-center gap-2.5 px-6 py-3 rounded-xl bg-daw-card hover:bg-white/10 border border-white/15 text-sm font-semibold text-white transition">
+          <span>U.M.A 公式 note (開発ログ・記事を読む)</span>
+          <svg class="w-4 h-4 text-daw-cyan" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+          </svg>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <footer class="py-10 border-t border-white/10 bg-[#050609] text-slate-400 text-xs font-mono">
+    <div class="max-w-7xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div>
+        © 2026 Universal Make Associates. All rights reserved.
+      </div>
+      <div class="flex items-center gap-6">
+        <a href="#user-manual" class="hover:text-white transition">User Manual</a>
+        <a href="https://note.com/jazzy_begin" target="_blank" rel="noopener noreferrer"
+           class="text-daw-cyan hover:underline flex items-center gap-1.5">
+          <span>https://note.com/jazzy_begin</span>
+        </a>
+        <a href="https://github.com/music-traning/TriLayerReharm" target="_blank" rel="noopener noreferrer"
+           class="hover:text-white transition">
+          GitHub
+        </a>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ========================================================================
+       VANILLA JS: Interactive Tri-Layer Orb, 8-Bar & Passing Chord Simulator
+       ======================================================================== -->
+  <script>
+    (function () {
+      const genreSelect = document.getElementById('sim-genre');
+      const lengthSelect = document.getElementById('sim-length');
+      const mutationSlider = document.getElementById('sim-mutation');
+      const mutationValLabel = document.getElementById('sim-mutation-val');
+
+      const hudGenre = document.getElementById('hud-genre');
+      const hudLength = document.getElementById('hud-length');
+      const hudPassing = document.getElementById('hud-passing');
+      const hudMutation = document.getElementById('hud-mutation');
+      const orbChordReadout = document.getElementById('orb-chord-readout');
+      const orbCore = document.getElementById('orb-core');
+      const orbRingOuter = document.getElementById('orb-ring-outer');
+
+      const simPresetTitle = document.getElementById('sim-preset-title');
+      const simSubdivStatus = document.getElementById('sim-subdiv-status');
+      const simTimelineGrid = document.getElementById('sim-timeline-grid');
+
+      const presets = {
+        jazz: {
+          name: 'Jazz',
+          presetTitle: '1. Standard 2-5-1-6 (Dm7 - G7 - Cmaj7 - A7)',
+          label: 'JAZZ (Drop2)',
+          primary: '#ff8c24',
+          secondary: '#a855f7',
+          tertiary: '#06b6d4',
+          chords: ['Dm9', 'G13(b9)', 'Cmaj9(#11)', 'A7(b9,b13)'],
+          bars4: [
+            { base: 'Dm9', pass: 'Ab13(#11)' },
+            { base: 'G13', pass: 'Db9(#11)' },
+            { base: 'Cmaj9', pass: 'Eb9' },
+            { base: 'A7(b13)', pass: 'Ab9(#11)' }
+          ],
+          bars8: [
+            { base: 'Dm9', pass: 'Ab13' },
+            { base: 'Fm9 → Bb13', pass: 'Bb13(b9)' },
+            { base: 'Em9 → A7(b13)', pass: 'Eb9(#11)' },
+            { base: 'Dm9 → G13', pass: 'Db9(#11)' }
+          ]
+        },
+        neosoul: {
+          name: 'Neo-Soul',
+          presetTitle: '1. Smooth Walkdown 4-3-2-1 (Fmaj7 - Em7 - Dm7 - Cmaj7)',
+          label: 'NEO-SOUL (Cluster)',
+          primary: '#a855f7',
+          secondary: '#ec4899',
+          tertiary: '#ff8c24',
+          chords: ['Fmaj9(13)', 'Em11', 'Dm9(11)', 'Dbmaj9(#11)'],
+          bars4: [
+            { base: 'Fmaj9(13)', pass: 'F7(#9)' },
+            { base: 'Em11', pass: 'Eb9(#11)' },
+            { base: 'Dm11', pass: 'Db9(#11)' },
+            { base: 'Cmaj9', pass: 'F#7(b13)' }
+          ],
+          bars8: [
+            { base: 'Fmaj9', pass: 'B9(#11)' },
+            { base: 'Fm11 → Bb13', pass: 'E9(#11)' },
+            { base: 'Em11 → A7(#9)', pass: 'Eb9(13)' },
+            { base: 'Dm11 → G13sus4', pass: 'Gb9(#11)' }
+          ]
+        },
+        citypop: {
+          name: 'City Pop',
+          presetTitle: '2. Royal Road 4-5-3-6 (Fmaj7 - G7 - Em7 - Am7)',
+          label: 'CITY POP (Drop2)',
+          primary: '#ec4899',
+          secondary: '#06b6d4',
+          tertiary: '#ff8c24',
+          chords: ['Fmaj9', 'G13(sus4)', 'Em7(11)', 'A7(b9,b13)'],
+          bars4: [
+            { base: 'Fmaj9', pass: 'Ab13' },
+            { base: 'G13sus4', pass: 'F9(#11)' },
+            { base: 'Em9', pass: 'Bb9(#11)' },
+            { base: 'Am9', pass: 'Eb9(#11)' }
+          ],
+          bars8: [
+            { base: 'Dm9', pass: 'F#9(#11)' },
+            { base: 'Fm9 → Bb13', pass: 'F9' },
+            { base: 'Em9 → Am9', pass: 'Eb9(#11)' },
+            { base: 'Dm9 → G13', pass: 'Gb9(#11)' }
+          ]
+        },
+        cinematic: {
+          name: 'Cinematic',
+          presetTitle: '4. Descending Line Cliche (Am - AmMaj7 - Am7 - D7)',
+          label: 'CINEMATIC (Spread)',
+          primary: '#14b8a6',
+          secondary: '#06b6d4',
+          tertiary: '#a855f7',
+          chords: ['Am(add9)', 'Am(maj9)', 'Am9', 'D9(#11)'],
+          bars4: [
+            { base: 'Am(add9)', pass: 'E7(b9)' },
+            { base: 'Am(maj7)', pass: 'Bb7(#11)' },
+            { base: 'Am9', pass: 'Eb9(#11)' },
+            { base: 'D9(#11)', pass: 'Gb7(#11)' }
+          ],
+          bars8: [
+            { base: 'Fmaj9(#11)', pass: 'F#7(b9)' },
+            { base: 'Fm9', pass: 'Eb9(#11)' },
+            { base: 'Dm7(b5)', pass: 'F7(b13)' },
+            { base: 'E7(b9,b13)', pass: 'Bb7(#11)' }
+          ]
+        },
+        lofi: {
+          name: 'Lo-Fi',
+          presetTitle: '1. Rainy Study Beats (Fmaj7 - Em7 - Dm7 - G7)',
+          label: 'LO-FI (Warm Close)',
+          primary: '#d97706',
+          secondary: '#a855f7',
+          tertiary: '#06b6d4',
+          chords: ['Fmaj9', 'Em9', 'Dm9', 'G13(b9)'],
+          bars4: [
+            { base: 'Fmaj9', pass: 'F9(#11)' },
+            { base: 'Em9', pass: 'Eb9' },
+            { base: 'Dm9', pass: 'Ab9(#11)' },
+            { base: 'G13', pass: 'Gb9(#11)' }
+          ],
+          bars8: [
+            { base: 'Fmaj9', pass: 'F#9' },
+            { base: 'Fm9', pass: 'F9(b13)' },
+            { base: 'Em9 → A7(b13)', pass: 'Eb9' },
+            { base: 'Dm9 → G13', pass: 'Gb9(#11)' }
+          ]
+        },
+        modernrnb: {
+          name: 'Modern R&B',
+          presetTitle: '1. Slow Jam 2-5-1-4 (Dm7 - G7sus4 - Cmaj7 - Fmaj7)',
+          label: 'MODERN R&B (Lush)',
+          primary: '#6366f1',
+          secondary: '#ec4899',
+          tertiary: '#06b6d4',
+          chords: ['Dm11', 'G13sus4', 'Cmaj9', 'Fmaj9(#11)'],
+          bars4: [
+            { base: 'Dm11', pass: 'Ab13' },
+            { base: 'G13sus4', pass: 'Db9(#11)' },
+            { base: 'Cmaj9', pass: 'Gb9(#11)' },
+            { base: 'Fmaj9', pass: 'Eb9(#11)' }
+          ],
+          bars8: [
+            { base: 'Bm7(b5)', pass: 'F9(#11)' },
+            { base: 'E7(#9,b13)', pass: 'Bb9(#11)' },
+            { base: 'Am11 → D9', pass: 'Eb9(#11)' },
+            { base: 'Dm11 → G13', pass: 'Ab13' }
+          ]
+        },
+        gospel: {
+          name: 'Gospel',
+          presetTitle: '1. Sunday Morning Walkup (Cmaj7 - Dm7/E7 - Fmaj7 - F#dim7/G7)',
+          label: 'GOSPEL (Spread)',
+          primary: '#facc15',
+          secondary: '#ff8c24',
+          tertiary: '#a855f7',
+          chords: ['Cmaj9', 'E7(#9,b13)', 'Fmaj9(13)', 'F#dim7 → G13'],
+          bars4: [
+            { base: 'Cmaj9', pass: 'Eb9(#11)' },
+            { base: 'Dm9 → E7(#9)', pass: 'Gb9(#11)' },
+            { base: 'Fmaj9(13)', pass: 'G9' },
+            { base: 'F#dim7 → G13', pass: 'Db9(#11)' }
+          ],
+          bars8: [
+            { base: 'Em9', pass: 'Bb9(#11)' },
+            { base: 'A7(#9,b13)', pass: 'Eb9(#11)' },
+            { base: 'Dm9 → Fm9', pass: 'Db9' },
+            { base: 'Cmaj9 → G13', pass: 'Db9(#11)' }
+          ]
+        },
+        chip: {
+          name: '8-Bit (Chiptune)',
+          presetTitle: '1. Heroic Overworld (C - G - Am - F/G)',
+          label: '8-BIT (Clean Close)',
+          primary: '#22c55e',
+          secondary: '#06b6d4',
+          tertiary: '#facc15',
+          chords: ['C', 'G7', 'Am7', 'Fm → G7'],
+          bars4: [
+            { base: 'C', pass: 'Ab7' },
+            { base: 'G', pass: 'Bb7' },
+            { base: 'Am', pass: 'Gb7' },
+            { base: 'F → G', pass: 'Db7' }
+          ],
+          bars8: [
+            { base: 'F', pass: 'F#7' },
+            { base: 'Fm', pass: 'F7' },
+            { base: 'Em → Am', pass: 'Eb7' },
+            { base: 'Dm → G7', pass: 'Db7' }
+          ]
+        }
+      };
+
+      function renderTimeline(preset, barsCount, mut) {
+        const allBars = barsCount === 8
+          ? preset.bars4.concat(preset.bars8)
+          : preset.bars4;
+
+        simPresetTitle.textContent =
+          `PRESET (${barsCount} BARS): [${preset.name}] ${preset.presetTitle}`;
+
+        let statusText = 'Sub-Division: OFF (0–30% Safe Rhythm)';
+        let statusClass = 'px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-bold';
+        if (mut > 30 && mut < 70) {
+          statusText = 'Sub-Division: Selective Passing Chords (30–70% Cadence Approach)';
+          statusClass = 'px-2 py-0.5 rounded bg-daw-amber/20 text-daw-amber font-bold';
+        } else if (mut >= 70 && mut < 85) {
+          statusText = 'Sub-Division: All Bars Split + Tritone Subs (70–85% Chaos)';
+          statusClass = 'px-2 py-0.5 rounded bg-daw-crimson/20 text-daw-crimson font-bold';
+        } else if (mut >= 85) {
+          statusText = 'Sub-Division: 3–4 Beat Bebop Approach Chains (85–100% Extreme Chaos)';
+          statusClass = 'px-2 py-0.5 rounded bg-daw-crimson text-white font-bold';
+        }
+        simSubdivStatus.textContent = statusText;
+        simSubdivStatus.className = statusClass;
+
+        simTimelineGrid.innerHTML = '';
+
+        allBars.forEach((barObj, idx) => {
+          const isSplit =
+            (mut >= 70) ||
+            (mut > 30 && (idx % 2 === 1)) ||
+            (mut >= 56 && idx === 0);
+
+          const isBebopChain = (mut >= 85);
+
+          const cell = document.createElement('div');
+          cell.className = 'rounded-lg bg-[#111520] border border-white/10 p-2.5 flex flex-col justify-between gap-2';
+
+          const barHeader = document.createElement('div');
+          barHeader.className = 'flex items-center justify-between text-[10px] text-slate-400';
+          barHeader.innerHTML = `<span>BAR ${idx + 1}</span><span>${isBebopChain ? '4-BEAT CHAIN' : (isSplit ? 'SPLIT (2+2)' : '4 BEATS')}</span>`;
+          cell.appendChild(barHeader);
+
+          const badgeRow = document.createElement('div');
+          badgeRow.className = 'flex flex-wrap gap-1 items-center';
+
+          const baseBadge = document.createElement('span');
+          baseBadge.className = 'px-1.5 py-0.5 rounded bg-black/80 border border-daw-amber/70 text-white text-[11px] font-bold';
+          baseBadge.textContent = barObj.base;
+          badgeRow.appendChild(baseBadge);
+
+          if (isBebopChain) {
+            const chainBadge = document.createElement('span');
+            chainBadge.className = 'px-1.5 py-0.5 rounded bg-daw-purple/25 border border-daw-purple text-daw-purple text-[10px] font-bold';
+            chainBadge.textContent = 'V7/bII';
+            badgeRow.appendChild(chainBadge);
+          }
+
+          if (isSplit) {
+            const passBadge = document.createElement('span');
+            passBadge.className = 'px-1.5 py-0.5 rounded bg-daw-crimson/20 border border-daw-crimson text-daw-crimson text-[10px] font-bold';
+            passBadge.textContent = '→ ' + barObj.pass;
+            badgeRow.appendChild(passBadge);
+          }
+
+          cell.appendChild(badgeRow);
+
+          // Mini note bars visualization
+          const notesBar = document.createElement('div');
+          notesBar.className = 'flex items-center gap-1 pt-1';
+          if (isBebopChain) {
+            notesBar.innerHTML = `
+              <div class="h-2 w-1/4 rounded-sm bg-daw-amber/85"></div>
+              <div class="h-2 w-1/4 rounded-sm bg-daw-purple/85"></div>
+              <div class="h-2 w-1/4 rounded-sm bg-daw-crimson/85"></div>
+              <div class="h-2 w-1/4 rounded-sm bg-daw-crimson"></div>
+            `;
+          } else if (isSplit) {
+            notesBar.innerHTML = `
+              <div class="h-2 w-1/2 rounded-sm bg-daw-amber/85"></div>
+              <div class="h-2 w-1/2 rounded-sm bg-daw-crimson/85"></div>
+            `;
+          } else {
+            notesBar.innerHTML = `<div class="h-2 w-full rounded-sm bg-daw-amber/80"></div>`;
+          }
+          cell.appendChild(notesBar);
+
+          simTimelineGrid.appendChild(cell);
+        });
+      }
+
+      function updateOrbState() {
+        const genreKey = genreSelect.value;
+        const barsCount = parseInt(lengthSelect.value, 10) || 8;
+        const mut = parseInt(mutationSlider.value, 10);
+        const preset = presets[genreKey] || presets.jazz;
+
+        mutationValLabel.textContent = mut + '%';
+        hudMutation.textContent = mut + '%';
+        hudGenre.textContent = preset.label;
+        hudLength.textContent = barsCount + ' BARS';
+        hudPassing.textContent = mut <= 30 ? 'BYPASSED' : (mut >= 85 ? 'BEBOP 4x' : 'ACTIVE');
+
+        const root = document.documentElement;
+        if (mut > 75) {
+          root.style.setProperty('--orb-primary', '#f43f5e');
+          root.style.setProperty('--orb-secondary', preset.primary);
+        } else {
+          root.style.setProperty('--orb-primary', preset.primary);
+          root.style.setProperty('--orb-secondary', preset.secondary);
+        }
+        root.style.setProperty('--orb-tertiary', preset.tertiary);
+
+        const speedSec = Math.max(1.8, 16 - (mut / 100) * 14.2);
+        root.style.setProperty('--orb-speed', speedSec.toFixed(1) + 's');
+
+        const chordIdx = Math.min(3, Math.floor((mut / 101) * 4));
+        orbChordReadout.textContent = preset.chords[chordIdx];
+
+        if (mut > 65) {
+          orbRingOuter.style.borderStyle = 'solid';
+          orbCore.style.transform = `scale(${1 + (mut - 65) * 0.005})`;
+        } else {
+          orbRingOuter.style.borderStyle = 'dashed';
+          orbCore.style.transform = 'scale(1)';
+        }
+
+        renderTimeline(preset, barsCount, mut);
+      }
+
+      genreSelect.addEventListener('change', updateOrbState);
+      lengthSelect.addEventListener('change', updateOrbState);
+      mutationSlider.addEventListener('input', updateOrbState);
+      updateOrbState();
+    })();
+  </script>
+</body>
+</html>

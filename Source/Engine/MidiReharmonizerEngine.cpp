@@ -360,13 +360,45 @@ void MidiReharmonizerEngine::updateRulesFromPresets(int genreIndex, int artistIn
             genre.minorSecondPenalty = 45.0f;
             break;
         case 3: // Cinematic
-        default:
             genre.allowTritoneSub = false;
             genre.allowTensions = true;
             genre.preferredStyle = VoicingStyle::Spread;
             genre.omitRootPenalty = 25.0f;
             genre.guideToneMissingPenalty = 25.0f;
             genre.minorSecondPenalty = 55.0f;
+            break;
+        case 4: // Lo-Fi (Warm close/drop2 voicings with gentle tensions)
+            genre.allowTritoneSub = true;
+            genre.allowTensions = true;
+            genre.preferredStyle = VoicingStyle::Close;
+            genre.omitRootPenalty = 6.0f;
+            genre.guideToneMissingPenalty = 35.0f;
+            genre.minorSecondPenalty = 22.0f;
+            break;
+        case 5: // Modern R&B (Lush spread/drop2 9th/11th voicings)
+            genre.allowTritoneSub = true;
+            genre.allowTensions = true;
+            genre.preferredStyle = VoicingStyle::Drop2;
+            genre.omitRootPenalty = 10.0f;
+            genre.guideToneMissingPenalty = 38.0f;
+            genre.minorSecondPenalty = 26.0f;
+            break;
+        case 6: // Gospel (Rich chromatic passing & altered tensions)
+            genre.allowTritoneSub = true;
+            genre.allowTensions = true;
+            genre.preferredStyle = VoicingStyle::Spread;
+            genre.omitRootPenalty = 12.0f;
+            genre.guideToneMissingPenalty = 42.0f;
+            genre.minorSecondPenalty = 20.0f;
+            break;
+        case 7: // 8-Bit (Chiptune: Clean 3-4 note triadic/7th close voicings)
+        default:
+            genre.allowTritoneSub = false;
+            genre.allowTensions = false;
+            genre.preferredStyle = VoicingStyle::Close;
+            genre.omitRootPenalty = 30.0f;
+            genre.guideToneMissingPenalty = 35.0f;
+            genre.minorSecondPenalty = 65.0f;
             break;
     }
 
@@ -491,6 +523,66 @@ void MidiReharmonizerEngine::processMidiBlock(
     }
 }
 
+void MidiReharmonizerEngine::extractAuditionMidiForBlock(
+    juce::MidiBuffer& outAuditionMidi,
+    double loopStartPpq,
+    double blockDurationPpq,
+    double ppqPerSample,
+    int numSamples) const noexcept
+{
+    const juce::SpinLock::ScopedTryLockType tryLock(sequenceLock_);
+    if (!tryLock.isLocked() || reharmonizedSequence_.empty() || ppqPerSample <= 0.0)
+        return;
+
+    const double kLoopLengthPpq = (reharmonizedSequence_.back().ppqPosition > 16.5) ? 32.0 : 16.0;
+    const double wrappedStart = std::fmod(std::max(0.0, loopStartPpq), kLoopLengthPpq);
+    const double loopEndPpq   = wrappedStart + blockDurationPpq;
+
+    auto emitRange = [&](double rangeStartPpq, double rangeEndPpq, double basePpqOffset)
+    {
+        auto it = std::lower_bound(
+            reharmonizedSequence_.begin(),
+            reharmonizedSequence_.end(),
+            rangeStartPpq,
+            [](const TimedMidiEvent& ev, double targetPpq)
+            {
+                return ev.ppqPosition < targetPpq;
+            }
+        );
+
+        for (; it != reharmonizedSequence_.end() && it->ppqPosition < rangeEndPpq; ++it)
+        {
+            const double offsetPpq = (it->ppqPosition - rangeStartPpq) + basePpqOffset;
+            const int sampleOffset = juce::jlimit(
+                0,
+                std::max(0, numSamples - 1),
+                static_cast<int>(std::round(offsetPpq / ppqPerSample))
+            );
+            outAuditionMidi.addEvent(it->message, sampleOffset);
+        }
+    };
+
+    if (loopEndPpq < kLoopLengthPpq)
+    {
+        emitRange(wrappedStart, loopEndPpq, 0.0);
+    }
+    else
+    {
+        const double firstPartPpq = kLoopLengthPpq - wrappedStart;
+        emitRange(wrappedStart, kLoopLengthPpq + 0.001, 0.0);
+
+        const int wrapSample = juce::jlimit(
+            0,
+            std::max(0, numSamples - 1),
+            static_cast<int>(std::round(firstPartPpq / ppqPerSample))
+        );
+        outAuditionMidi.addEvent(juce::MidiMessage::allNotesOff(1), wrapSample);
+
+        const double wrappedEndPpq = std::fmod(loopEndPpq, kLoopLengthPpq);
+        emitRange(0.0, wrappedEndPpq, firstPartPpq);
+    }
+}
+
 //==============================================================================
 // Phase 3-1 & Phase 8: 和音候補の生成と枝刈り (Mutation 量に応じたテンション・代理コード拡張)
 //==============================================================================
@@ -504,7 +596,8 @@ std::vector<Voicing> MidiReharmonizerEngine::generateCandidateVoicings(
     // 70% 以上 (Chaos: > 0.70f) ではオルタードテンションおよびモーダルインターチェンジを解禁
     const bool isChaosZone = (normMutation > 0.70f);
 
-    const bool useTritoneSub = !isBasicSafeZone
+    const bool useTritoneSub = !chord.isPassingChord
+                               && !isBasicSafeZone
                                && ((profile.allowTritoneSub && chord.quality == ChordQuality::Dominant7)
                                    || (normMutation > 0.82f && (chord.quality == ChordQuality::Dominant7 || chord.quality == ChordQuality::Minor7)));
 
@@ -663,7 +756,8 @@ float MidiReharmonizerEngine::calculateStaticCost(
     const float chaosFactor = std::clamp((normMutation - 0.5f) * 2.0f, 0.0f, 1.0f);
     const float basicStrictness = std::clamp((0.5f - normMutation) * 2.0f, 0.0f, 1.0f);
 
-    const bool useTritoneSub = (normMutation >= 0.20f)
+    const bool useTritoneSub = !chord.isPassingChord
+                               && (normMutation >= 0.20f)
                                && ((profile.allowTritoneSub && chord.quality == ChordQuality::Dominant7)
                                    || (normMutation > 0.82f && (chord.quality == ChordQuality::Dominant7 || chord.quality == ChordQuality::Minor7)));
 
@@ -964,6 +1058,282 @@ std::vector<Voicing> MidiReharmonizerEngine::findOptimalVoicingPath(
 }
 
 //==============================================================================
+// Phase 13: Harmonic Rhythm（和声リズム）の動的分割とパッシングコード（裏コード等）の自動挿入
+//==============================================================================
+ChordBlock MidiReharmonizerEngine::computeApproachChordForTarget(
+    const ChordBlock& sourceBlock,
+    int targetRootPitchClass,
+    double startPpq,
+    double durationPpq,
+    bool useTritoneSubstitution,
+    std::optional<int> nextTargetTopNote) noexcept
+{
+    ChordBlock approach = sourceBlock;
+    approach.startPpq      = startPpq;
+    approach.durationPpq   = std::max(0.20, durationPpq);
+    approach.isPassingChord = true;
+
+    // 裏コード（ターゲットの半音上のドミナント7th: bII7 -> I）または
+    // セカンダリードミナント（ターゲットの完全5度上のドミナント7th: V7/target -> target）を算出
+    const int normalizedTargetRoot = normalizePitchClass(targetRootPitchClass);
+    if (useTritoneSubstitution)
+    {
+        approach.rootPitchClass = normalizePitchClass(normalizedTargetRoot + 1);
+    }
+    else
+    {
+        approach.rootPitchClass = normalizePitchClass(normalizedTargetRoot + 7);
+    }
+    approach.quality = ChordQuality::Dominant7;
+
+    // パッシングコードのベロシティを微調整し、グルーヴの抑揚を付与
+    approach.baseVelocity = std::clamp(static_cast<int>(std::round(sourceBlock.baseVelocity * 0.94f)), 40, 124);
+
+    // 元のトップノートと次のターゲットトップノートの間を滑らかに橋渡しする目標トップノートを設定
+    if (sourceBlock.targetTopNote.has_value() && nextTargetTopNote.has_value())
+    {
+        const int srcTop = *sourceBlock.targetTopNote;
+        const int dstTop = *nextTargetTopNote;
+        if (srcTop != dstTop)
+        {
+            approach.targetTopNote = dstTop + ((srcTop > dstTop) ? 1 : -1);
+        }
+    }
+
+    return approach;
+}
+
+std::vector<ChordBlock> MidiReharmonizerEngine::subdivideAndInsertPassingChords(
+    std::span<const ChordBlock> baseProgression,
+    const VoicingProfile& profile) const
+{
+    std::vector<ChordBlock> result;
+    if (baseProgression.empty())
+        return result;
+
+    const float mutation = std::clamp(profile.mutationAmount, 0.0f, 100.0f);
+
+    // 1. 0%〜30% (Basic/Safe領域): 分割は行わず、入力された和声リズムを完全に維持
+    if (mutation <= 30.0f)
+    {
+        result.assign(baseProgression.begin(), baseProgression.end());
+        return result;
+    }
+
+    const size_t numBlocks = baseProgression.size();
+    result.reserve(numBlocks * 4);
+
+    // 2拍（ハーフノート = 2.0 PPQ）を超える長いブロックのインデックスを抽出
+    constexpr double kMinSubdivideDurationPpq = 2.01;
+    std::vector<size_t> longBlockIndices;
+    for (size_t i = 0; i < numBlocks; ++i)
+    {
+        if (baseProgression[i].durationPpq > kMinSubdivideDurationPpq)
+        {
+            longBlockIndices.push_back(i);
+        }
+    }
+
+    if (longBlockIndices.empty())
+    {
+        result.assign(baseProgression.begin(), baseProgression.end());
+        return result;
+    }
+
+    // Mutation 量に応じてどの長いブロックを分割するかを決定
+    std::vector<bool> shouldSubdivide(numBlocks, false);
+
+    if (mutation < 70.0f)
+    {
+        // 30%〜70% (50%付近): 4小節に1〜2回程度の頻度（8小節時は2〜4回）で、解決前（ツーファイブ解決やターンアラウンド等）に控えめに挿入
+        const size_t barsScale = (numBlocks > 5) ? 2u : 1u;
+        const size_t maxSplits = ((mutation < 56.0f) ? 1u : 2u) * barsScale;
+
+        // 音楽的な優先度スコアでソート（4度上行/5度下行の強進行解決前やフレーズ末尾を最優先）
+        struct CandidateRank
+        {
+            size_t blockIdx;
+            int priorityScore;
+        };
+        std::vector<CandidateRank> ranked;
+        ranked.reserve(longBlockIndices.size());
+
+        for (size_t idx : longBlockIndices)
+        {
+            const auto& curr = baseProgression[idx];
+            const auto& next = baseProgression[(idx + 1) % numBlocks];
+            const int rootIntervalToNext = normalizePitchClass(next.rootPitchClass - curr.rootPitchClass);
+
+            int score = 0;
+            // 完全4度上行（=完全5度下行: rootIntervalToNext == 5）の解決前（例: G7 -> Cmaj7 や Dm7 -> G7）を最優先
+            if (rootIntervalToNext == 5)
+                score += 50;
+            // ドミナント7thコードブロックやマイナー7thブロックは分割適性が高い
+            if (curr.quality == ChordQuality::Dominant7)
+                score += 30;
+            else if (curr.quality == ChordQuality::Minor7)
+                score += 20;
+            // 4小節フレーズの2小節目・4小節目（偶数番目インデックス = 1, 3）を優先
+            if ((idx % 2) == 1)
+                score += 25;
+            if (idx + 1 == numBlocks)
+                score += 15;
+
+            ranked.push_back({ idx, score });
+        }
+
+        std::stable_sort(ranked.begin(), ranked.end(),
+            [](const CandidateRank& a, const CandidateRank& b)
+            {
+                return a.priorityScore > b.priorityScore;
+            });
+
+        const size_t countToEnable = std::min(maxSplits, ranked.size());
+        for (size_t k = 0; k < countToEnable; ++k)
+        {
+            shouldSubdivide[ranked[k].blockIdx] = true;
+        }
+    }
+    else
+    {
+        // 70%〜100% (Chaos領域): 2拍を超えるすべての長い白玉コードブロックを分割
+        for (size_t idx : longBlockIndices)
+        {
+            shouldSubdivide[idx] = true;
+        }
+    }
+
+    // 各ブロックを走査して時間軸分割＆アプローチコード（裏コード / セカンダリードミナント / 裏の裏）を生成
+    constexpr double kNoteGapPpq = 0.08;
+
+    for (size_t i = 0; i < numBlocks; ++i)
+    {
+        const auto& current = baseProgression[i];
+        if (!shouldSubdivide[i])
+        {
+            result.push_back(current);
+            continue;
+        }
+
+        const auto& targetNext = baseProgression[(i + 1) % numBlocks];
+        const int targetRootPc = normalizePitchClass(targetNext.rootPitchClass);
+        const double totalSpanPpq = current.durationPpq;
+
+        // 元のコードの終端時刻（startPpq + durationPpq）と次のコードの開始時刻から実質グリッド幅を推定
+        const double nextStartPpq = (i + 1 < numBlocks)
+                                        ? baseProgression[i + 1].startPpq
+                                        : (current.startPpq + std::ceil(totalSpanPpq));
+        const double gridSlotPpq  = std::max(totalSpanPpq + kNoteGapPpq, nextStartPpq - current.startPpq);
+
+        // Chaos極限領域（85%〜100%）かつ1小節（約3.4拍以上）の長い白玉コードの場合：
+        // バップのように3分割〜4分割し、「裏コードのさらに裏」や連続ドミナント・チェインを挿入
+        if (mutation >= 92.0f && gridSlotPpq >= 3.4)
+        {
+            // 4分割（1拍ずつ: 基本コード -> アプローチIIm7b5/裏の裏の裏 -> 裏コードの裏(V7/bII7) -> 裏コード(bII7) -> ターゲット）
+            const double stepPpq = gridSlotPpq * 0.25;
+            const double noteDur = std::max(0.20, stepPpq - kNoteGapPpq);
+
+            // Beat 1: 前半基本コード
+            ChordBlock beat1 = current;
+            beat1.durationPpq = noteDur;
+            result.push_back(beat1);
+
+            // Beat 4 (ターゲット直前): 裏コード (bII7 = targetRoot + 1)
+            const int tritoneSubRoot = normalizePitchClass(targetRootPc + 1);
+            // Beat 3 (裏コードへ向かうセカンダリードミナント / 裏コードの裏 = tritoneSubRoot + 7 = targetRoot + 8)
+            const int subOfSubRoot   = normalizePitchClass(tritoneSubRoot + 7);
+            // Beat 2 (さらにその半音上または5度上のアプローチ = subOfSubRoot + 1 = targetRoot + 9)
+            const int preApproachRoot = normalizePitchClass(subOfSubRoot + 1);
+
+            // Beat 2: Pre-Approach (Related Minor7b5 or Dominant7)
+            ChordBlock beat2 = computeApproachChordForTarget(
+                current, subOfSubRoot, current.startPpq + stepPpq, noteDur, true, targetNext.targetTopNote);
+            beat2.rootPitchClass = preApproachRoot;
+            beat2.quality = ((i % 2) == 0) ? ChordQuality::Minor7b5 : ChordQuality::Dominant7;
+            result.push_back(beat2);
+
+            // Beat 3: 裏コードのさらに裏 (Dominant7 resolving to bII7)
+            ChordBlock beat3 = computeApproachChordForTarget(
+                current, tritoneSubRoot, current.startPpq + stepPpq * 2.0, noteDur, false, targetNext.targetTopNote);
+            beat3.rootPitchClass = subOfSubRoot;
+            result.push_back(beat3);
+
+            // Beat 4: ターゲットへ半音下行解決する裏コード (Tritone Substitution: bII7)
+            ChordBlock beat4 = computeApproachChordForTarget(
+                current, targetRootPc, current.startPpq + stepPpq * 3.0, noteDur, true, targetNext.targetTopNote);
+            result.push_back(beat4);
+        }
+        else if (mutation >= 80.0f && gridSlotPpq >= 3.4)
+        {
+            // 3分割（前半2拍: 基本コード -> 3拍目: 裏コードの裏 / Related II -> 4拍目: 裏コード）
+            const double halfPpq    = gridSlotPpq * 0.5;
+            const double quarterPpq = gridSlotPpq * 0.25;
+
+            // 前半（2拍）: 基本コード
+            ChordBlock firstHalf = current;
+            firstHalf.durationPpq = std::max(0.25, halfPpq - kNoteGapPpq);
+            result.push_back(firstHalf);
+
+            const int tritoneSubRoot = normalizePitchClass(targetRootPc + 1);
+
+            // 後半1（3拍目）: 裏コードへ向かうアプローチ（裏コードの半音上または完全5度上）
+            ChordBlock preApproach = computeApproachChordForTarget(
+                current,
+                tritoneSubRoot,
+                current.startPpq + halfPpq,
+                std::max(0.20, quarterPpq - kNoteGapPpq),
+                (i % 2) == 0,
+                targetNext.targetTopNote
+            );
+            result.push_back(preApproach);
+
+            // 後半2（4拍目）: ターゲットへ向かう裏コード (bII7)
+            ChordBlock finalApproach = computeApproachChordForTarget(
+                current,
+                targetRootPc,
+                current.startPpq + halfPpq + quarterPpq,
+                std::max(0.20, quarterPpq - kNoteGapPpq),
+                true,
+                targetNext.targetTopNote
+            );
+            result.push_back(finalApproach);
+        }
+        else
+        {
+            // 標準の2分割（前半: 基本コード / 後半: 裏コードまたはセカンダリードミナント）
+            const double halfSlotPpq = gridSlotPpq * 0.5;
+            const double firstDur    = std::max(0.25, halfSlotPpq - kNoteGapPpq);
+            const double secondStart = current.startPpq + halfSlotPpq;
+            const double secondDur   = std::max(0.25, (current.startPpq + totalSpanPpq) - secondStart);
+
+            // 1. 前半ブロック（基本コード）
+            ChordBlock firstHalf = current;
+            firstHalf.durationPpq = firstDur;
+            result.push_back(firstHalf);
+
+            // 2. 後半ブロック（アプローチ領域: 裏コード or セカンダリードミナント）
+            // 元のコード自体が既にセカンダリードミナント（V7/target）である場合は、必ず裏コード（bII7）へ変化させて動きを作る
+            const bool isAlreadySecondaryDom = (normalizePitchClass(current.rootPitchClass) == normalizePitchClass(targetRootPc + 7));
+            const bool useTritoneSub = isAlreadySecondaryDom
+                                       || profile.allowTritoneSub
+                                       || (mutation >= 48.0f);
+
+            ChordBlock passingChord = computeApproachChordForTarget(
+                current,
+                targetRootPc,
+                secondStart,
+                secondDur,
+                useTritoneSub,
+                targetNext.targetTopNote
+            );
+            result.push_back(passingChord);
+        }
+    }
+
+    return result;
+}
+
+//==============================================================================
 // オフライン・リハーモナイズ実行パイプライン
 //==============================================================================
 bool MidiReharmonizerEngine::triggerOfflineReharmonize(bool usePreviewProgressionIfEmpty)
@@ -995,7 +1365,12 @@ bool MidiReharmonizerEngine::triggerOfflineReharmonize(bool usePreviewProgressio
     if (progression.empty())
         return false;
 
-    // ビタビアルゴリズムで最適ボイシング列を探索
+    // Phase 13: ボイシング探索の前段階で Harmonic Rhythm を動的に分割し、
+    //           直後のターゲットコードへ向かうパッシングコード（裏コード・セカンダリードミナント等）を挿入
+    progression = subdivideAndInsertPassingChords(progression, profileCopy);
+
+    // Phase 3 & 13: 分割されたパッシングコードを含む全時間ステップを Viterbi トレリスへ統合し、
+    //               曲全体を通して最もボイスリーディングが滑らかな最適ボイシング経路を探索
     const auto optimalVoicings = findOptimalVoicingPath(progression, profileCopy);
 
     // 発音タイミング変調（ストラム／ジッター）およびベロシティ変調を適用してMIDIイベント列へ変換
@@ -1267,8 +1642,7 @@ void MidiReharmonizerEngine::injectReharmonizedMidi(
     const juce::Optional<juce::AudioPlayHead::PositionInfo>& posInfo,
     int numSamples)
 {
-    targetBuffer.clear();
-
+    // 重要: リアルタイムに入力されたMIDIイベント（Note On/Off等）を絶対に .clear() で消去せずスルー維持する
     const bool isPlaying = posInfo.hasValue() && posInfo->getIsPlaying();
     if (!isPlaying)
         return;
@@ -1282,7 +1656,6 @@ void MidiReharmonizerEngine::injectReharmonizedMidi(
     const double ppqPerSample = (bpm / 60.0) / currentSampleRate_;
     const double blockEndPpq = blockStartPpq + (static_cast<double>(numSamples) * ppqPerSample);
 
-    // reharmonizedSequence_ はPPQ昇順ソート済みのため二分探索で高速にブロック開始位置を特定
     auto it = std::lower_bound(
         reharmonizedSequence_.begin(),
         reharmonizedSequence_.end(),

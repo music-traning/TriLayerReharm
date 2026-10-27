@@ -78,6 +78,14 @@ juce::Colour TriLayerOrbComponent::resolveGenreColour() const noexcept
         baseColour = juce::Colour(0xffec4899); // City Pop: Neon Pink
     else if (currentGenre_.containsIgnoreCase("Cinematic"))
         baseColour = juce::Colour(0xff14b8a6); // Cinematic: Deep Emerald
+    else if (currentGenre_.containsIgnoreCase("Lo-Fi"))
+        baseColour = juce::Colour(0xffd97706); // Lo-Fi: Vintage Sepia Gold
+    else if (currentGenre_.containsIgnoreCase("Modern R&B"))
+        baseColour = juce::Colour(0xff6366f1); // Modern R&B: Velvet Indigo
+    else if (currentGenre_.containsIgnoreCase("Gospel"))
+        baseColour = juce::Colour(0xfffacc15); // Gospel: Radiant Gold
+    else if (currentGenre_.containsIgnoreCase("8-Bit"))
+        baseColour = juce::Colour(0xff22c55e); // 8-Bit (Chiptune): Retro Pixel Green
 
     // Mutation が 50% を超えて 100% に近づくにつれ、彩度の高い蛍光警告色（ネオンマゼンタ／アシッドレッド）へフェード
     const float normMutation = mutationAmount_ / 100.0f;

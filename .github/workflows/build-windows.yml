@@ -1,0 +1,39 @@
+name: Windows VST3 Build & Installer
+
+# 実行されるタイミングの定義
+on:
+  push:
+    branches: [ "main" ] # mainブランチにPushされた時に実行
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch: # GitHubの画面上から手動で実行できるようにする設定
+
+jobs:
+  build:
+    runs-on: windows-latest # 仮想のWindows環境を起動
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive # JUCEをサブモジュールとして入れている場合必須
+
+    - name: Configure CMake
+      run: cmake -B build -G "Visual Studio 17 2022" -A x64
+
+    - name: Build VST3 Plugin
+      run: cmake --build build --config Release
+
+    # 前回のPhase 11で作成した .iss ファイル（インストーラー構築スクリプト）を指定します
+    # ※ファイル名が違う場合は書き換えてください
+    - name: Build Installer (Inno Setup)
+      run: iscc TriLayerReharm_Installer.iss
+      
+    # 生成された .exe ファイルをGitHub上に「Artifact（成果物）」としてアップロードします
+    - name: Upload Installer
+      uses: actions/upload-artifact@v4
+      with:
+        name: TriLayerReharm-Windows-Installer
+        # Inno Setupが出力するフォルダ（Output）とファイル名を指定します
+        path: Output/*.exe 
+        retention-days: 7

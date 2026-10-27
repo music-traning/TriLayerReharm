@@ -276,6 +276,7 @@ struct ChordBlock
     double durationPpq { 4.0 };                     ///< 長さ（PPQ）
     int baseVelocity { 90 };                        ///< 基準ベロシティ (1 - 127)
     std::optional<int> targetTopNote;               ///< 元のトップノート（メロディ維持の参照用、任意）
+    bool isPassingChord { false };                  ///< Phase 13: 分割挿入されたパッシングコード（裏コード等）かどうか
 };
 
 } // namespace reharm::engine

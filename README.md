@@ -6,13 +6,15 @@
 
 ---
 
-## ⚡ Features (U.M.A Signature)
+## ⚡ Features (U.M.A Signature — Phase 14 Complete)
 
-*   **The Tri-Layer Engine:** 「Genre(理論) × Artist(手癖) × Environment(情景)」を掛け合わせ、Viterbiアルゴリズムによる動的計画法で曲全体を通した最も美しいボイスリーディング（Drop2等）を一瞬で計算します。
+*   **The Tri-Layer Engine:** 「Genre(理論: 全8種) × Artist(手癖: 全4種) × Environment(情景: 全3種)」を掛け合わせ、Viterbiアルゴリズムによる動的計画法で曲全体を通した最も美しいボイスリーディング（Drop2 / Spread / Cluster等）を一瞬で計算します。
+*   **Dynamic Harmonic Rhythm & Passing Chords (Phase 13):** 2拍を超える長い白玉コードブロックを自動検出し、直後のターゲットコードへ滑らかに解決する「裏コード（Tritone Substitution: bII7）」や「セカンダリードミナント（V7）」を逆算して自動挿入。高Mutation領域（80%〜100%）では1小節を3〜4拍に細分化し、「裏コードのさらに裏」を含むビバップ風の連続アプローチチェインを構築します。
+*   **32 Progression Presets & 8-Bar Expansion (Phase 12 & 14):** `Jazz`, `Neo-Soul`, `City Pop`, `Cinematic`, `Lo-Fi`, `Modern R&B`, `Gospel`, `8-Bit (Chiptune)` の8ジャンル×4種＝計32種類の定番進行プリセットを搭載。さらに `4 Bars` と、後半（5〜8小節目）でサブドミナントマイナーやターンアラウンドへ音楽的に展開する `8 Bars` をワンクリックで切り替え可能です。
+*   **Built-in 12-Voice Audition Synth & Full Pass-Through (Phase 12):** 12ボイスの軽量エレピ音源（`Audition (Preview)`）を内蔵し、DAW停止中でもプラグイン単体で即座にループ試聴可能。通常時はオーディオ・MIDIともに100%完全スルー（パススルー）し、後段の外部シンセ（Spire等）の演奏を一切妨げません。
 *   **Audio Groove Sync (Sidechain):** DAWのドラムトラックをサイドチェインで流し込むだけで、トランジェントを解析し、バッキングMIDIの発音タイミングをその「ノリ（レイドバック/ドライブ）」に完全同期（吸着）させます。
-*   **Mutation Slider:** 0%（端正なJazz）から100%（原形をとどめないアバンギャルド）まで、リハモの過激さをリアルタイムにコントロール。スライダーに連動してUIのオーブが荒れ狂います。
-*   **Drag & Drop Workflow:** プラグイン画面にMIDIリージョンを投げて読み込ませ、エモく変換されたらDAWのタイムラインへ投げ返す。インスピレーションを絶対に止めないシームレスな体験。
-*   **Realtime Chord Analyzer:** リハモによって生み出された複雑なテンション和音を逆解析し、現在鳴っているコードネーム（例: `Dbmaj9(#11)`）をピアノロール上にリアルタイム描画します。
+*   **Mutation Slider & Undo/Redo History:** 0%（端正な基本ボイシング）から100%（オルタード＆連続パッシングコードのアバンギャルド）まで、リハモの過激さをリアルタイムにコントロール。`Ctrl+Z` / `Ctrl+Y` 対応の Undo / Redo 履歴管理も搭載。
+*   **Drag & Drop Workflow & Realtime Chord Analyzer:** プラグイン画面への `.mid` ファイルD&Dインポートと、DAWタイムラインへの直接D&Dエクスポートに対応。生成されたボイシングやパッシングコードのコードネーム（例: `Db9(#11)`）をピアノロール上にリアルタイム描画します。
 
 ---
 

@@ -38,7 +38,7 @@ juce_add_plugin(TriLayerReharm
     NEEDS_MIDI_INPUT TRUE
     NEEDS_MIDI_OUTPUT TRUE
     IS_MIDI_EFFECT TRUE
-    EDITOR_WANTS_KEYBOARD_FOCUS FALSE
+    EDITOR_WANTS_KEYBOARD_FOCUS TRUE
     COPY_PLUGIN_AFTER_BUILD TRUE
     VST3_COPY_DIR "${DEFAULT_VST3_INSTALL_DIR}"
     PLUGIN_MANUFACTURER_CODE UMAs
@@ -58,6 +58,7 @@ target_sources(TriLayerReharm
         Source/Engine/ChordAnalyzer.cpp
         Source/Engine/ChordTemplateBank.h
         Source/Engine/ChordTemplateBank.cpp
+        Source/Engine/SimpleAuditionSynth.h
         Source/Engine/MidiReharmonizerEngine.h
         Source/Engine/MidiReharmonizerEngine.cpp
         Source/UI/TriLayerOrbComponent.h

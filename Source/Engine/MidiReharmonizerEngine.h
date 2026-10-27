@@ -60,6 +60,16 @@ public:
                           const juce::Optional<juce::AudioPlayHead::PositionInfo>& posInfo,
                           int numSamples);
 
+    /**
+     * @brief Phase 12: Audition（内部プレビューシンセ）用に、現在のブロック範囲に対応する
+     *        リハーモナイズ済みMIDIイベントを4小節ループ（16.0 PPQ周期）で抽出します。
+     */
+    void extractAuditionMidiForBlock(juce::MidiBuffer& outAuditionMidi,
+                                     double loopStartPpq,
+                                     double blockDurationPpq,
+                                     double ppqPerSample,
+                                     int numSamples) const noexcept;
+
     //==============================================================================
     // オフライン操作・モード制御API
     void setOperatingMode(OperatingMode newMode) noexcept;
@@ -208,6 +218,39 @@ public:
     [[nodiscard]] std::vector<Voicing> findOptimalVoicingPath(
         std::span<const ChordBlock> progression,
         const VoicingProfile& profile) const;
+
+    //==============================================================================
+    // Phase 13: Harmonic Rhythm（和声リズム）の動的分割とパッシングコード自動挿入
+    //==============================================================================
+
+    /**
+     * @brief 長さが2拍（2.0 PPQ = ハーフノート）を超える長いコードブロックを検出し、
+     *        `profile.mutationAmount`（0.0〜100.0）に応じて拍を分割してアプローチコード（裏コード・セカンダリードミナント等）を自動挿入します。
+     *
+     * - 0%〜30%: 分割を行わず、入力された和声リズムをそのまま維持
+     * - 30%〜70% (50%付近): 4小節に1〜2回程度の頻度で、ドミナント解決前やターンアラウンド等に裏コードを控えめに挿入
+     * - 70%〜100% (Chaos): 可能な限りすべての白玉コードを分割し、100%付近では連続アプローチコード（裏コードのさらに裏など）を挿入してバップ風に細分化
+     */
+    [[nodiscard]] std::vector<ChordBlock> subdivideAndInsertPassingChords(
+        std::span<const ChordBlock> baseProgression,
+        const VoicingProfile& profile) const;
+
+    /**
+     * @brief 直後に来るターゲットコードのルート音（`targetRootPitchClass`）へ向かうアプローチコード（裏コードまたはセカンダリードミナント）を生成します。
+     * @param sourceBlock           分割元のコードブロック
+     * @param targetRootPitchClass  解決先（直後のコード）のルートピッチクラス (0〜11)
+     * @param startPpq              パッシングコードの開始PPQ位置
+     * @param durationPpq           パッシングコードの長さ（PPQ）
+     * @param useTritoneSubstitution true の場合は裏コード（半音上の7th）、false の場合はセカンダリードミナント（完全5度上の7th）
+     * @param nextTargetTopNote     直後のコードのトップノート（滑らかなトップノート接続用、任意）
+     */
+    [[nodiscard]] static ChordBlock computeApproachChordForTarget(
+        const ChordBlock& sourceBlock,
+        int targetRootPitchClass,
+        double startPpq,
+        double durationPpq,
+        bool useTritoneSubstitution,
+        std::optional<int> nextTargetTopNote = std::nullopt) noexcept;
 
 private:
     //==============================================================================
