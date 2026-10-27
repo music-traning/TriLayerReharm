@@ -1,0 +1,23 @@
+# CMake & Build artifacts
+build/
+cmake-build-*/
+out/
+
+# Inno Setup Output
+InstallerOutput/
+
+# Visual Studio / MSVC
+.vs/
+*.VC.db
+*.VC.opendb
+*.sdf
+*.suo
+*.user
+*.aps
+*.pch
+*.vspscc
+*.vssscc
+
+# OS temporary files
+.DS_Store
+Thumbs.db
