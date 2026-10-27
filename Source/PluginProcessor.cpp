@@ -229,23 +229,50 @@ void TriLayerReharmAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
         posInfo = currentPlayHead->getPosition();
     }
 
-    // 1. サイドチェイン入力（有効な場合）またはメイン入力からトランジェントを検出し GrooveMap を更新
+    // 1. サイドチェイン入力（有効かつ実バッファにチャンネルが存在する場合）またはメイン入力からトランジェントを検出し GrooveMap を更新
+    const int totalBufferChannels = buffer.getNumChannels();
+    bool sidechainProcessed = false;
+
     if (getBusCount(true) > 1 && getBus(true, 1)->isEnabled())
     {
-        auto sidechainBuffer = getBusBuffer(buffer, true, 1);
-        if (sidechainBuffer.getNumChannels() > 0 && numSamples > 0)
+        const int scOffset   = getChannelIndexInProcessBlockBuffer(true, 1, 0);
+        const int scChannels = getBus(true, 1)->getNumberOfChannels();
+        if (scChannels > 0 && scOffset >= 0 && (scOffset + scChannels) <= totalBufferChannels && numSamples > 0)
         {
-            detectTransientsAndRecordGroove(sidechainBuffer, posInfo);
+            auto sidechainBuffer = getBusBuffer(buffer, true, 1);
+            if (sidechainBuffer.getNumChannels() > 0)
+            {
+                detectTransientsAndRecordGroove(sidechainBuffer, posInfo);
+                sidechainProcessed = true;
+            }
         }
     }
-    else if (buffer.getNumChannels() > 0 && numSamples > 0)
+
+    if (!sidechainProcessed && totalBufferChannels > 0 && numSamples > 0)
     {
-        detectTransientsAndRecordGroove(buffer, posInfo);
+        juce::AudioBuffer<float> mainView(
+            buffer.getArrayOfWritePointers(),
+             std::min(totalBufferChannels, 2),
+            numSamples);
+        detectTransientsAndRecordGroove(mainView, posInfo);
     }
 
     // 2. オーディオ信号の完全パススルー処理（絶対に buffer.clear() で全体を消去しない）
-    auto mainInput  = getBusBuffer(buffer, true, 0);
-    auto mainOutput = getBusBuffer(buffer, false, 0);
+    const int mainInBusChannels  = (getBusCount(true) > 0 && getBus(true, 0)->isEnabled())
+                                       ? std::min(getBus(true, 0)->getNumberOfChannels(), totalBufferChannels)
+                                       : 0;
+    const int mainOutBusChannels = (getBusCount(false) > 0 && getBus(false, 0)->isEnabled())
+                                       ? std::min(getBus(false, 0)->getNumberOfChannels(), totalBufferChannels)
+                                       : 0;
+
+    juce::AudioBuffer<float> mainInput(
+        buffer.getArrayOfWritePointers(),
+        mainInBusChannels,
+        numSamples);
+    juce::AudioBuffer<float> mainOutput(
+        buffer.getArrayOfWritePointers(),
+        mainOutBusChannels,
+        numSamples);
     const int numInChannels  = mainInput.getNumChannels();
     const int numOutChannels = mainOutput.getNumChannels();
 

@@ -89,8 +89,9 @@ TriLayerReharmAudioProcessorEditor::TriLayerReharmAudioProcessorEditor(TriLayerR
                 apvtsRef_.getRawParameterValue(ParamIDs::progressionPreset)->load()));
             if (selectedIdx != currentParamIdx)
             {
-                processorRef_.getUndoManager().beginNewTransaction("Select Progression Preset");
+                processorRef_.beginUndoTransaction("Select Progression Preset");
                 presetParam->setValueNotifyingHost(presetParam->convertTo0to1(static_cast<float>(selectedIdx)));
+                (void) apvtsRef_.copyState();
             }
         }
         hasCustomDroppedMidi_ = false;
@@ -125,7 +126,11 @@ TriLayerReharmAudioProcessorEditor::TriLayerReharmAudioProcessorEditor(TriLayerR
     mutationSlider_.setColour(juce::Slider::textBoxOutlineColourId, juce::Colour(0xff2e3446));
     mutationSlider_.onDragStart = [this]()
     {
-        processorRef_.getUndoManager().beginNewTransaction("Change Mutation Slider");
+        processorRef_.beginUndoTransaction("Change Mutation Slider");
+    };
+    mutationSlider_.onDragEnd = [this]()
+    {
+        (void) apvtsRef_.copyState();
     };
     addAndMakeVisible(mutationSlider_);
 
@@ -135,7 +140,7 @@ TriLayerReharmAudioProcessorEditor::TriLayerReharmAudioProcessorEditor(TriLayerR
     grooveSyncButton_.setColour(juce::ToggleButton::tickDisabledColourId, juce::Colour(0xff64748b));
     grooveSyncButton_.onClick = [this]()
     {
-        processorRef_.getUndoManager().beginNewTransaction("Toggle Groove Sync");
+        processorRef_.beginUndoTransaction("Toggle Groove Sync");
     };
     addAndMakeVisible(grooveSyncButton_);
 
@@ -145,7 +150,7 @@ TriLayerReharmAudioProcessorEditor::TriLayerReharmAudioProcessorEditor(TriLayerR
     auditionButton_.setColour(juce::ToggleButton::tickDisabledColourId, juce::Colour(0xff64748b));
     auditionButton_.onClick = [this]()
     {
-        processorRef_.getUndoManager().beginNewTransaction("Toggle Audition Synth");
+        processorRef_.beginUndoTransaction("Toggle Audition Synth");
     };
     addAndMakeVisible(auditionButton_);
 
@@ -161,6 +166,12 @@ TriLayerReharmAudioProcessorEditor::TriLayerReharmAudioProcessorEditor(TriLayerR
 
     addAndMakeVisible(orbComponent_);
     addAndMakeVisible(pianoRollComponent_);
+
+    // PianoRollComponent へ直接ファイルがドロップされた場合も Editor の filesDropped へ統合転送
+    pianoRollComponent_.onFilesDroppedCallback = [this](const juce::StringArray& droppedFiles)
+    {
+        filesDropped(droppedFiles, 0, 0);
+    };
 
     // APVTS パラメーターリスナーの登録
     apvtsRef_.addParameterListener(ParamIDs::genre, this);
@@ -203,18 +214,16 @@ TriLayerReharmAudioProcessorEditor::~TriLayerReharmAudioProcessorEditor()
 
 void TriLayerReharmAudioProcessorEditor::performUndo()
 {
-    if (processorRef_.getUndoManager().canUndo())
+    if (processorRef_.performUndo())
     {
-        processorRef_.getUndoManager().undo();
         syncEngineAndRefreshViews();
     }
 }
 
 void TriLayerReharmAudioProcessorEditor::performRedo()
 {
-    if (processorRef_.getUndoManager().canRedo())
+    if (processorRef_.performRedo())
     {
-        processorRef_.getUndoManager().redo();
         syncEngineAndRefreshViews();
     }
 }
@@ -277,14 +286,19 @@ void TriLayerReharmAudioProcessorEditor::updateProgressionComboItemsForGenre(int
 }
 
 //==============================================================================
-// Phase 6: juce::FileDragAndDropTarget 実装（MIDIファイルのD&Dインポート）
+// Phase 6: juce::FileDragAndDropTarget 実装（MIDIファイルの堅牢なD&Dインポート）
 //==============================================================================
 bool TriLayerReharmAudioProcessorEditor::isInterestedInFileDrag(const juce::StringArray& files)
 {
-    for (const auto& filePath : files)
+    for (const auto& rawPath : files)
     {
-        const juce::File f(filePath);
-        if (f.hasFileExtension(".mid;.midi"))
+        const auto trimmedPath = rawPath.trim().unquoted();
+        if (trimmedPath.endsWithIgnoreCase(".mid") || trimmedPath.endsWithIgnoreCase(".midi"))
+            return true;
+
+        const juce::File candidate = juce::File::createFileWithoutCheckingPath(trimmedPath);
+        const juce::String ext = candidate.getFileExtension();
+        if (ext.equalsIgnoreCase(".mid") || ext.equalsIgnoreCase(".midi"))
             return true;
     }
     return false;
@@ -292,13 +306,20 @@ bool TriLayerReharmAudioProcessorEditor::isInterestedInFileDrag(const juce::Stri
 
 void TriLayerReharmAudioProcessorEditor::fileDragEnter(const juce::StringArray& files, int x, int y)
 {
-    juce::ignoreUnused(files, x, y);
-    pianoRollComponent_.setFileDragHighlight(true);
+    juce::ignoreUnused(x, y);
+    if (isInterestedInFileDrag(files))
+    {
+        pianoRollComponent_.setFileDragHighlight(true);
+    }
 }
 
 void TriLayerReharmAudioProcessorEditor::fileDragMove(const juce::StringArray& files, int x, int y)
 {
-    juce::ignoreUnused(files, x, y);
+    juce::ignoreUnused(x, y);
+    if (isInterestedInFileDrag(files))
+    {
+        pianoRollComponent_.setFileDragHighlight(true);
+    }
 }
 
 void TriLayerReharmAudioProcessorEditor::fileDragExit(const juce::StringArray& files)
@@ -312,46 +333,93 @@ void TriLayerReharmAudioProcessorEditor::filesDropped(const juce::StringArray& f
     juce::ignoreUnused(x, y);
     pianoRollComponent_.setFileDragHighlight(false);
 
-    for (const auto& filePath : files)
+    if (files.isEmpty())
     {
-        const juce::File droppedFile(filePath);
-        if (droppedFile.existsAsFile() && droppedFile.hasFileExtension(".mid;.midi"))
+        DBG("filesDropped: Received empty file array.");
+        return;
+    }
+
+    // 先頭ファイル（files[0]）から優先的に検査し、拡張子が .mid / .midi の対象ファイルを特定
+    juce::File targetMidiFile(files[0].trim().unquoted());
+    if (!targetMidiFile.getFileExtension().equalsIgnoreCase(".mid")
+        && !targetMidiFile.getFileExtension().equalsIgnoreCase(".midi"))
+    {
+        for (const auto& path : files)
         {
-            if (importMidiFileToEngine(droppedFile))
+            const juce::File candidate(path.trim().unquoted());
+            const auto ext = candidate.getFileExtension();
+            if (ext.equalsIgnoreCase(".mid") || ext.equalsIgnoreCase(".midi"))
             {
-                hasCustomDroppedMidi_ = true;
-                pianoRollComponent_.setSourceLabelText("SOURCE: " + droppedFile.getFileName());
-                syncEngineAndRefreshViews();
+                targetMidiFile = candidate;
+                break;
             }
-            break;
         }
+    }
+
+    if (importMidiFileToEngine(targetMidiFile))
+    {
+        hasCustomDroppedMidi_ = true;
+        pianoRollComponent_.setSourceLabelText("SOURCE: " + targetMidiFile.getFileName());
+
+        // 即時再計算および非同期UI更新をトリガー
+        syncEngineAndRefreshViews();
+        triggerAsyncUpdate();
     }
 }
 
 bool TriLayerReharmAudioProcessorEditor::importMidiFileToEngine(const juce::File& midiFileToLoad)
 {
+    // 1. ファイルの存在確認
+    if (!midiFileToLoad.existsAsFile())
+    {
+        DBG("Failed to import MIDI file (file does not exist): " << midiFileToLoad.getFullPathName());
+        return false;
+    }
+
+    const auto ext = midiFileToLoad.getFileExtension();
+    if (!ext.equalsIgnoreCase(".mid") && !ext.equalsIgnoreCase(".midi"))
+    {
+        DBG("Failed to import MIDI file (unsupported extension '" << ext << "'): " << midiFileToLoad.getFileName());
+        return false;
+    }
+
+    // 2. FileInputStream の生成とストリーム有効性チェック
     juce::FileInputStream inputStream(midiFileToLoad);
     if (!inputStream.openedOk())
+    {
+        DBG("Failed to open FileInputStream for MIDI file: " << midiFileToLoad.getFullPathName());
         return false;
+    }
 
+    // 3. juce::MidiFile のインスタンス化と readFrom() によるパース確認
     juce::MidiFile midiFile;
-    if (!midiFile.readFrom(inputStream))
+    if (!midiFile.readFrom(inputStream, true))
+    {
+        DBG("Failed to parse MidiFile via readFrom(): " << midiFileToLoad.getFullPathName());
         return false;
+    }
 
+    // タイムフォーマット（TPQN または SMPTE秒単位）の正規化
     const short rawTimeFormat = midiFile.getTimeFormat();
     double ticksPerQuarterNote = 960.0;
+    double timestampScale = 1.0;
+
     if (rawTimeFormat > 0)
     {
         ticksPerQuarterNote = static_cast<double>(rawTimeFormat);
     }
     else
     {
+        // SMPTE フォーマットの場合は秒変換後、120BPM基準（1拍=0.5秒 -> 960 TPQN）へスケーリング
         midiFile.convertTimestampTicksToSeconds();
-        ticksPerQuarterNote = 0.5;
+        ticksPerQuarterNote = 960.0;
+        timestampScale = 960.0 * 2.0;
     }
 
+    // 4. 複数トラックのノート情報を単一の juce::MidiMessageSequence に統合（マージ）
     juce::MidiMessageSequence mergedSequence;
     const int numTracks = midiFile.getNumTracks();
+    int totalNoteOnCount = 0;
 
     for (int t = 0; t < numTracks; ++t)
     {
@@ -362,9 +430,55 @@ bool TriLayerReharmAudioProcessorEditor::importMidiFileToEngine(const juce::File
         for (int i = 0; i < track->getNumEvents(); ++i)
         {
             const auto* holder = track->getEventPointer(i);
-            if (holder != nullptr && holder->message.isNoteOnOrOff())
+            if (holder == nullptr)
+                continue;
+
+            const auto& rawMsg = holder->message;
+            if (!rawMsg.isNoteOnOrOff())
+                continue;
+
+            // ドラムトラック（MIDI Ch.10）が混在している場合は和音解析のノイズにならないよう除外（単一トラックがCh.10のみの場合は後段で救済）
+            if (numTracks > 1 && rawMsg.getChannel() == 10)
+                continue;
+
+            juce::MidiMessage msg(rawMsg);
+            if (rawMsg.isNoteOn(true) && rawMsg.getVelocity() == 0)
             {
-                mergedSequence.addEvent(holder->message);
+                msg = juce::MidiMessage::noteOff(rawMsg.getChannel(), rawMsg.getNoteNumber());
+            }
+            msg.setTimeStamp( std::max(0.0, rawMsg.getTimeStamp() * timestampScale) );
+
+            if (msg.isNoteOn())
+                ++totalNoteOnCount;
+
+            mergedSequence.addEvent(msg);
+        }
+    }
+
+    // 万が一全ノートが Ch.10 だった場合のフォールバック（チャネル制限なしで再収集）
+    if (totalNoteOnCount == 0)
+    {
+        for (int t = 0; t < numTracks; ++t)
+        {
+            const auto* track = midiFile.getTrack(t);
+            if (track == nullptr)
+                continue;
+
+            for (int i = 0; i < track->getNumEvents(); ++i)
+            {
+                const auto* holder = track->getEventPointer(i);
+                if (holder == nullptr || !holder->message.isNoteOnOrOff())
+                    continue;
+
+                juce::MidiMessage msg(holder->message);
+                if (msg.isNoteOn(true) && msg.getVelocity() == 0)
+                    msg = juce::MidiMessage::noteOff(msg.getChannel(), msg.getNoteNumber());
+                msg.setTimeStamp(std::max(0.0, holder->message.getTimeStamp() * timestampScale));
+
+                if (msg.isNoteOn())
+                    ++totalNoteOnCount;
+
+                mergedSequence.addEvent(msg);
             }
         }
     }
@@ -372,10 +486,22 @@ bool TriLayerReharmAudioProcessorEditor::importMidiFileToEngine(const juce::File
     mergedSequence.sort();
     mergedSequence.updateMatchedPairs();
 
-    if (mergedSequence.getNumEvents() == 0)
+    if (mergedSequence.getNumEvents() == 0 || totalNoteOnCount == 0)
+    {
+        DBG("Imported MIDI file contains no note events: " << midiFileToLoad.getFileName()
+            << " (Tracks: " << numTracks << ")");
         return false;
+    }
 
+    // 5. エンジンへインプットシーケンスを転送し、詳細なデバッグログを出力
     processorRef_.getEngine().setSourceMidiSequence(mergedSequence, ticksPerQuarterNote);
+
+    DBG("Successfully imported MIDI file: " << midiFileToLoad.getFileName()
+        << ", Tracks: " << numTracks
+        << ", Notes count: " << totalNoteOnCount
+        << ", Sequence events: " << mergedSequence.getNumEvents()
+        << ", TPQN: " << ticksPerQuarterNote);
+
     return true;
 }
 
@@ -412,8 +538,9 @@ void TriLayerReharmAudioProcessorEditor::loadSelectedProgressionTemplate()
 void TriLayerReharmAudioProcessorEditor::parameterChanged(const juce::String& parameterID, float newValue)
 {
     juce::ignoreUnused(newValue);
-    if (parameterID == ParamIDs::genre
-        || parameterID == ParamIDs::progressionPreset
+    // プリセット進行または長さそのものが明示的に切り替えられた場合のみプリセットモードへ戻す
+    // （Genre 変更時は D&D インポート済みのカスタム MIDI を維持して別ジャンルで再計算させる）
+    if (parameterID == ParamIDs::progressionPreset
         || parameterID == ParamIDs::progressionLength)
     {
         hasCustomDroppedMidi_ = false;

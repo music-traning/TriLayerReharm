@@ -32,6 +32,51 @@ void PianoRollComponent::setFileDragHighlight(bool isDraggingOver)
     }
 }
 
+bool PianoRollComponent::isInterestedInFileDrag(const juce::StringArray& files)
+{
+    for (const auto& rawPath : files)
+    {
+        const auto trimmed = rawPath.trim().unquoted();
+        if (trimmed.endsWithIgnoreCase(".mid") || trimmed.endsWithIgnoreCase(".midi"))
+            return true;
+
+        const juce::File f = juce::File::createFileWithoutCheckingPath(trimmed);
+        const auto ext = f.getFileExtension();
+        if (ext.equalsIgnoreCase(".mid") || ext.equalsIgnoreCase(".midi"))
+            return true;
+    }
+    return false;
+}
+
+void PianoRollComponent::fileDragEnter(const juce::StringArray& files, int x, int y)
+{
+    juce::ignoreUnused(files, x, y);
+    setFileDragHighlight(true);
+}
+
+void PianoRollComponent::fileDragMove(const juce::StringArray& files, int x, int y)
+{
+    juce::ignoreUnused(files, x, y);
+    setFileDragHighlight(true);
+}
+
+void PianoRollComponent::fileDragExit(const juce::StringArray& files)
+{
+    juce::ignoreUnused(files);
+    setFileDragHighlight(false);
+}
+
+void PianoRollComponent::filesDropped(const juce::StringArray& files, int x, int y)
+{
+    juce::ignoreUnused(x, y);
+    setFileDragHighlight(false);
+
+    if (onFilesDroppedCallback)
+    {
+        onFilesDroppedCallback(files);
+    }
+}
+
 void PianoRollComponent::setSourceLabelText(const juce::String& newSourceLabel)
 {
     sourceLabelText_ = newSourceLabel;

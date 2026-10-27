@@ -76,6 +76,33 @@ public:
     [[nodiscard]] engine::MidiReharmonizerEngine& getEngine() noexcept { return reharmEngine_; }
 
     /**
+     * @brief APVTS内の未フラッシュのパラメーター変更を即座にValueTreeへ同期した上で新規Undoトランザクションを開始します。
+     */
+    void beginUndoTransaction(const juce::String& actionName = {})
+    {
+        (void) apvts_.copyState();
+        undoManager_.beginNewTransaction(actionName);
+    }
+
+    /**
+     * @brief 未フラッシュのパラメーター変更をValueTreeへ同期した上で Undo を実行します。
+     */
+    bool performUndo()
+    {
+        (void) apvts_.copyState();
+        return undoManager_.undo();
+    }
+
+    /**
+     * @brief 未フラッシュのパラメーター変更をValueTreeへ同期した上で Redo を実行します。
+     */
+    bool performRedo()
+    {
+        (void) apvts_.copyState();
+        return undoManager_.redo();
+    }
+
+    /**
      * @brief UIスレッドから呼び出し、直近に検出されたトランジェント強度（0.0f 〜 1.0f）を取得＆減衰させます。
      */
     [[nodiscard]] float consumeTransientVisualPulse() noexcept;

@@ -162,20 +162,54 @@ void MidiReharmonizerEngine::setSourceMidiSequence(
     std::vector<TimedMidiEvent> importedEvents;
     importedEvents.reserve(static_cast<size_t>(sequence.getNumEvents()));
 
+    double firstNoteOnPpq = std::numeric_limits<double>::max();
+    int importedNoteOnCount = 0;
+
     for (int i = 0; i < sequence.getNumEvents(); ++i)
     {
         const auto* holder = sequence.getEventPointer(i);
         if (holder == nullptr)
             continue;
 
-        const auto& msg = holder->message;
-        if (msg.isNoteOnOrOff() || msg.isController() || msg.isPitchWheel())
+        const auto& rawMsg = holder->message;
+        if (!rawMsg.isNoteOnOrOff() && !rawMsg.isController() && !rawMsg.isPitchWheel())
+            continue;
+
+        // Running Status 等で Velocity 0 の NoteOn が来た場合は明示的な NoteOff へ正規化
+        juce::MidiMessage normalizedMsg(rawMsg);
+        if (rawMsg.isNoteOn(true) && rawMsg.getVelocity() == 0)
         {
-            TimedMidiEvent ev;
-            ev.ppqPosition = std::max(0.0, msg.getTimeStamp() / safeTpqn);
-            ev.samplePosition = 0;
-            ev.message = msg;
-            importedEvents.push_back(ev);
+            normalizedMsg = juce::MidiMessage::noteOff(rawMsg.getChannel(), rawMsg.getNoteNumber());
+            normalizedMsg.setTimeStamp(rawMsg.getTimeStamp());
+        }
+
+        const double eventPpq = std::max(0.0, normalizedMsg.getTimeStamp() / safeTpqn);
+        if (normalizedMsg.isNoteOn())
+        {
+            firstNoteOnPpq = std::min(firstNoteOnPpq, eventPpq);
+            ++importedNoteOnCount;
+        }
+
+        TimedMidiEvent ev;
+        ev.ppqPosition = eventPpq;
+        ev.samplePosition = 0;
+        ev.message = normalizedMsg;
+        importedEvents.push_back(ev);
+    }
+
+    // DAWの途中小節（例: 9小節目 = 32.0 PPQ等）から書き出されたMIDIファイルの場合、
+    // 先頭のノートが第1小節（0.0 PPQ付近）から始まるようにオフセットを正規化
+    if (firstNoteOnPpq < std::numeric_limits<double>::max() && firstNoteOnPpq >= 1.0)
+    {
+        const double barAlignedOffsetPpq = (firstNoteOnPpq >= 4.0)
+                                               ? (std::floor(firstNoteOnPpq / 4.0) * 4.0)
+                                               : std::floor(firstNoteOnPpq);
+        if (barAlignedOffsetPpq > 0.0)
+        {
+            for (auto& ev : importedEvents)
+            {
+                ev.ppqPosition = std::max(0.0, ev.ppqPosition - barAlignedOffsetPpq);
+            }
         }
     }
 
@@ -185,8 +219,12 @@ void MidiReharmonizerEngine::setSourceMidiSequence(
         {
             if (std::abs(a.ppqPosition - b.ppqPosition) > 1.0e-6)
                 return a.ppqPosition < b.ppqPosition;
-            return a.message.isNoteOff() && a.message.isNoteOn() == false && b.message.isNoteOn();
+            return a.message.isNoteOff() && !a.message.isNoteOn() && b.message.isNoteOn();
         });
+
+    DBG("MidiReharmonizerEngine::setSourceMidiSequence: Loaded "
+        << importedEvents.size() << " events (" << importedNoteOnCount
+        << " NoteOns), TPQN=" << safeTpqn);
 
     {
         const juce::SpinLock::ScopedLockType lock(sequenceLock_);
@@ -1429,8 +1467,8 @@ std::vector<ChordBlock> MidiReharmonizerEngine::extractChordProgressionFromCaptu
     if (notes.empty())
         return blocks;
 
-    // 開始PPQの近いノート（許容誤差 0.125 PPQ = 32分音符相当）を同一の和音ブロックとしてクラスタリング
-    constexpr double kChordOnsetTolerancePpq = 0.125;
+    // 開始PPQの近いノート（許容誤差 0.20 PPQ = 手弾きのストラム等も同一和音として束ねる）を同一の和音ブロックとしてクラスタリング
+    constexpr double kChordOnsetTolerancePpq = 0.20;
     size_t i = 0;
     while (i < notes.size())
     {
@@ -1459,6 +1497,20 @@ std::vector<ChordBlock> MidiReharmonizerEngine::extractChordProgressionFromCaptu
 
         blocks.push_back(block);
     }
+
+    // 短いスタッカート和音などが入力された場合でも、次のコードまでの和声スロットが2拍以上空いている場合は
+    // 自然なサステイン長へ補完し、Phase 13のパッシングコード分割が有効に機能するようにする
+    for (size_t b = 0; b + 1 < blocks.size(); ++b)
+    {
+        const double slotPpq = blocks[b + 1].startPpq - blocks[b].startPpq;
+        if (slotPpq >= 2.0 && blocks[b].durationPpq < slotPpq * 0.85)
+        {
+            blocks[b].durationPpq = std::max(blocks[b].durationPpq, slotPpq - 0.12);
+        }
+    }
+
+    DBG("MidiReharmonizerEngine::extractChordProgressionFromCaptured: Extracted "
+        << blocks.size() << " ChordBlocks from " << notes.size() << " notes.");
 
     return blocks;
 }
