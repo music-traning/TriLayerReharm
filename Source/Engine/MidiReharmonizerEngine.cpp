@@ -66,6 +66,31 @@ namespace
     }
 
     /**
+     * @brief v1.5 機能I: 指定されたスケール／モード種別を構成するルートからのインターバル配列（7音）を返す
+     */
+    [[nodiscard]] constexpr std::array<int, 7> getScaleIntervals(ScaleType scaleType) noexcept
+    {
+        switch (scaleType)
+        {
+            case ScaleType::MajorIonian:
+                return { 0, 2, 4, 5, 7, 9, 11 };
+            case ScaleType::NaturalMinorAeolian:
+                return { 0, 2, 3, 5, 7, 8, 10 };
+            case ScaleType::HarmonicMinor:
+                return { 0, 2, 3, 5, 7, 8, 11 };
+            case ScaleType::MelodicMinor:
+                return { 0, 2, 3, 5, 7, 9, 11 };
+            case ScaleType::Dorian:
+                return { 0, 2, 3, 5, 7, 9, 10 };
+            case ScaleType::Mixolydian:
+                return { 0, 2, 4, 5, 7, 9, 10 };
+            case ScaleType::Lydian:
+                return { 0, 2, 4, 6, 7, 9, 11 };
+        }
+        return { 0, 2, 4, 5, 7, 9, 11 };
+    }
+
+    /**
      * @brief 入力された構成音集合（ピッチクラス集合）から最も尤もらしいルートとコードクオリティを簡易推定する
      */
     void inferChordFromNotes(const std::vector<int>& notes, int& outRootPc, ChordQuality& outQuality)
@@ -238,7 +263,16 @@ void MidiReharmonizerEngine::updateRules(const GenreRules& genre,
 {
     const juce::SpinLock::ScopedLockType lock(sequenceLock_);
     activeProfile_ = synthesizeVoicingProfile(genre, artist, env);
-    activeProfile_.mutationAmount = mutationAmount_.load(std::memory_order_relaxed);
+    activeProfile_.mutationAmount    = mutationAmount_.load(std::memory_order_relaxed);
+    activeProfile_.melodyLock        = melodyLock_.load(std::memory_order_relaxed);
+    activeProfile_.forceDiatonic     = forceDiatonic_.load(std::memory_order_relaxed);
+    activeProfile_.songKeyPitchClass = songKeyPitchClass_.load(std::memory_order_relaxed);
+    activeProfile_.scaleType         = static_cast<ScaleType>(
+        std::clamp(scaleType_.load(std::memory_order_relaxed), 0, 6));
+    activeProfile_.pedalBassMode     = pedalBassMode_.load(std::memory_order_relaxed);
+    activeProfile_.compingStyle      = static_cast<CompingStyle>(
+        std::clamp(compingStyle_.load(std::memory_order_relaxed), 0, 2));
+    activeProfile_.splitMidiChannels = splitMidiChannels_.load(std::memory_order_relaxed);
 }
 
 void MidiReharmonizerEngine::setMutationAmount(float mutationPercent) noexcept
@@ -253,6 +287,501 @@ void MidiReharmonizerEngine::setMutationAmount(float mutationPercent) noexcept
 float MidiReharmonizerEngine::getMutationAmount() const noexcept
 {
     return mutationAmount_.load(std::memory_order_acquire);
+}
+
+void MidiReharmonizerEngine::setTransposeSemitones(int semitones) noexcept
+{
+    const int clamped = std::clamp(semitones, -12, 12);
+    transposeSemitones_.store(clamped, std::memory_order_release);
+
+    const juce::SpinLock::ScopedLockType lock(sequenceLock_);
+    const int delta = clamped - renderedTransposeSemitones_;
+    if (delta != 0 && !reharmonizedSequence_.empty())
+    {
+        for (auto& ev : reharmonizedSequence_)
+        {
+            if (ev.message.isNoteOnOrOff())
+            {
+                const int shiftedNote = std::clamp(ev.message.getNoteNumber() + delta, 0, 127);
+                ev.message.setNoteNumber(shiftedNote);
+            }
+        }
+        renderedTransposeSemitones_ = clamped;
+    }
+}
+
+int MidiReharmonizerEngine::getTransposeSemitones() const noexcept
+{
+    return transposeSemitones_.load(std::memory_order_acquire);
+}
+
+bool MidiReharmonizerEngine::toggleChordBlockLockByIndex(size_t blockIndex)
+{
+    const juce::SpinLock::ScopedLockType lock(sequenceLock_);
+    if (blockIndex >= lastProgression_.size() || blockIndex >= lastOptimalVoicings_.size())
+        return false;
+
+    auto& block = lastProgression_[blockIndex];
+    const double startPpq = block.startPpq;
+    const double endPpq   = block.startPpq + block.durationPpq;
+
+    // 既にロックされている場合はロック解除
+    auto it = std::find_if(lockedBlocks_.begin(), lockedBlocks_.end(),
+        [&](const ChordBlock& locked)
+        {
+            return std::abs(locked.startPpq - startPpq) < 0.12
+                && std::abs((locked.startPpq + locked.durationPpq) - endPpq) < 0.12;
+        });
+
+    if (it != lockedBlocks_.end())
+    {
+        lockedBlocks_.erase(it);
+        block.isLocked = false;
+        block.lockedVoicing = {};
+        return false;
+    }
+
+    // 新規ロック登録：直近のViterbi計算結果のボイシングを保存して固定
+    block.isLocked = true;
+    block.lockedVoicing = lastOptimalVoicings_[blockIndex];
+    lockedBlocks_.push_back(block);
+
+    std::sort(lockedBlocks_.begin(), lockedBlocks_.end(),
+        [](const ChordBlock& a, const ChordBlock& b)
+        {
+            return a.startPpq < b.startPpq;
+        });
+
+    return true;
+}
+
+bool MidiReharmonizerEngine::toggleChordBlockLockAtPpq(double ppqPosition)
+{
+    size_t targetIndex = std::numeric_limits<size_t>::max();
+    {
+        const juce::SpinLock::ScopedLockType lock(sequenceLock_);
+        for (size_t i = 0; i < lastProgression_.size(); ++i)
+        {
+            const double start = lastProgression_[i].startPpq;
+            const double end   = start + lastProgression_[i].durationPpq + 0.10;
+            if (ppqPosition >= start - 0.10 && ppqPosition <= end)
+            {
+                targetIndex = i;
+                break;
+            }
+        }
+    }
+
+    if (targetIndex == std::numeric_limits<size_t>::max())
+        return false;
+
+    return toggleChordBlockLockByIndex(targetIndex);
+}
+
+void MidiReharmonizerEngine::clearLockedChordBlocks()
+{
+    const juce::SpinLock::ScopedLockType lock(sequenceLock_);
+    lockedBlocks_.clear();
+    for (auto& block : lastProgression_)
+    {
+        block.isLocked = false;
+        block.lockedVoicing = {};
+    }
+}
+
+bool MidiReharmonizerEngine::hasLockedChordBlocks() const noexcept
+{
+    const juce::SpinLock::ScopedLockType lock(sequenceLock_);
+    return !lockedBlocks_.empty();
+}
+
+std::vector<ChordBlock> MidiReharmonizerEngine::getLockedChordBlocksSnapshot() const
+{
+    const juce::SpinLock::ScopedLockType lock(sequenceLock_);
+    return lockedBlocks_;
+}
+
+void MidiReharmonizerEngine::setLockedChordBlocksSnapshot(std::vector<ChordBlock> lockedBlocks)
+{
+    const juce::SpinLock::ScopedLockType lock(sequenceLock_);
+    lockedBlocks_ = std::move(lockedBlocks);
+}
+
+void MidiReharmonizerEngine::setCompareOriginalMode(bool compareOriginal) noexcept
+{
+    compareOriginalMode_.store(compareOriginal, std::memory_order_release);
+}
+
+bool MidiReharmonizerEngine::isCompareOriginalMode() const noexcept
+{
+    return compareOriginalMode_.load(std::memory_order_acquire);
+}
+
+std::vector<ChordBlockViewInfo> MidiReharmonizerEngine::getChordBlockViews() const
+{
+    std::vector<ChordBlockViewInfo> views;
+    const juce::SpinLock::ScopedLockType lock(sequenceLock_);
+
+    const size_t count = std::min(lastProgression_.size(), lastOptimalVoicings_.size());
+    views.reserve(count);
+
+    const int transposeShift = std::clamp(transposeSemitones_.load(std::memory_order_relaxed), -12, 12);
+
+    for (size_t i = 0; i < count; ++i)
+    {
+        const auto& block = lastProgression_[i];
+        const auto& voicing = lastOptimalVoicings_[i];
+
+        ChordBlockViewInfo info;
+        info.blockIndex     = i;
+        info.startPpq       = block.startPpq;
+        info.durationPpq    = block.durationPpq;
+        info.isLocked       = block.isLocked;
+        info.isPassingChord = block.isPassingChord;
+        info.midiNotes.reserve(voicing.midiNotes.size());
+
+        for (int n : voicing.midiNotes)
+        {
+            info.midiNotes.push_back(std::clamp(n + transposeShift, 0, 127));
+        }
+
+        views.push_back(std::move(info));
+    }
+
+    return views;
+}
+
+bool MidiReharmonizerEngine::shiftChordBlockVoicing(size_t blockIndex, int inversionSteps, int octaveShift)
+{
+    {
+        const juce::SpinLock::ScopedLockType lock(sequenceLock_);
+        if (blockIndex >= lastProgression_.size() || blockIndex >= lastOptimalVoicings_.size())
+            return false;
+
+        Voicing shifted = lastOptimalVoicings_[blockIndex];
+        if (shifted.midiNotes.empty())
+            return false;
+
+        std::sort(shifted.midiNotes.begin(), shifted.midiNotes.end());
+        const bool keepPedalBass = activeProfile_.pedalBassMode && shifted.midiNotes.size() >= 2;
+        const size_t rotateStartIdx = keepPedalBass ? 1 : 0;
+
+        // 1. 展開形（転回形）のシフト（+1: 最低音をオクターブ上げて上へ展開 / -1: 最高音をオクターブ下げて下へ展開）
+        if (inversionSteps > 0)
+        {
+            for (int step = 0; step < inversionSteps; ++step)
+            {
+                int movedNote = shifted.midiNotes[rotateStartIdx];
+                const int currentTop = shifted.midiNotes.back();
+                while (movedNote <= currentTop)
+                    movedNote += 12;
+
+                // 音域上限を超えすぎる場合はボイシング全体を1オクターブ下げて自然な音域内で循環させる
+                if (movedNote > std::min(104, activeProfile_.maxPitch + 12))
+                {
+                    for (size_t i = rotateStartIdx; i < shifted.midiNotes.size(); ++i)
+                        shifted.midiNotes[i] = std::max(24, shifted.midiNotes[i] - 12);
+                    movedNote = std::max(24, movedNote - 12);
+                }
+
+                shifted.midiNotes[rotateStartIdx] = std::clamp(movedNote, 24, 108);
+                std::sort(shifted.midiNotes.begin() + static_cast<std::ptrdiff_t>(rotateStartIdx), shifted.midiNotes.end());
+            }
+        }
+        else if (inversionSteps < 0)
+        {
+            for (int step = 0; step < -inversionSteps; ++step)
+            {
+                int movedNote = shifted.midiNotes.back();
+                const int currentBottom = shifted.midiNotes[rotateStartIdx];
+                while (movedNote >= currentBottom)
+                    movedNote -= 12;
+
+                // 音域下限を下回りすぎる場合はボイシング全体を1オクターブ上げて自然な音域内で循環させる
+                if (movedNote < std::max(28, activeProfile_.minPitch - 12))
+                {
+                    for (size_t i = rotateStartIdx; i < shifted.midiNotes.size(); ++i)
+                        shifted.midiNotes[i] = std::min(108, shifted.midiNotes[i] + 12);
+                    movedNote = std::min(108, movedNote + 12);
+                }
+
+                shifted.midiNotes.back() = std::clamp(movedNote, 24, 108);
+                std::sort(shifted.midiNotes.begin() + static_cast<std::ptrdiff_t>(rotateStartIdx), shifted.midiNotes.end());
+            }
+        }
+
+        // 2. オクターブ単位のシフト（+1 = +12半音, -1 = -12半音）
+        if (octaveShift != 0)
+        {
+            const int semitoneDelta = octaveShift * 12;
+            for (size_t i = rotateStartIdx; i < shifted.midiNotes.size(); ++i)
+            {
+                shifted.midiNotes[i] = std::clamp(shifted.midiNotes[i] + semitoneDelta, 24, 108);
+            }
+            std::sort(shifted.midiNotes.begin(), shifted.midiNotes.end());
+        }
+
+        auto& block = lastProgression_[blockIndex];
+        block.isLocked = true;
+        block.lockedVoicing = shifted;
+        lastOptimalVoicings_[blockIndex] = shifted;
+
+        const double startPpq = block.startPpq;
+        const double endPpq   = block.startPpq + block.durationPpq;
+
+        auto it = std::find_if(lockedBlocks_.begin(), lockedBlocks_.end(),
+            [&](const ChordBlock& locked)
+            {
+                return std::abs(locked.startPpq - startPpq) < 0.12
+                    && std::abs((locked.startPpq + locked.durationPpq) - endPpq) < 0.12;
+            });
+
+        if (it != lockedBlocks_.end())
+        {
+            *it = block;
+        }
+        else
+        {
+            lockedBlocks_.push_back(block);
+            std::sort(lockedBlocks_.begin(), lockedBlocks_.end(),
+                [](const ChordBlock& a, const ChordBlock& b)
+                {
+                    return a.startPpq < b.startPpq;
+                });
+        }
+    }
+
+    return triggerOfflineReharmonize(true);
+}
+
+bool MidiReharmonizerEngine::hasCapturedSequence() const noexcept
+{
+    const juce::SpinLock::ScopedLockType lock(sequenceLock_);
+    return !capturedSequence_.empty();
+}
+
+std::unique_ptr<juce::XmlElement> MidiReharmonizerEngine::createEngineStateXml() const
+{
+    std::vector<TimedMidiEvent> capturedCopy;
+    std::vector<ChordBlock> lockedCopy;
+
+    {
+        const juce::SpinLock::ScopedLockType lock(sequenceLock_);
+        capturedCopy = capturedSequence_;
+        lockedCopy   = lockedBlocks_;
+    }
+
+    auto engineXml = std::make_unique<juce::XmlElement>("EngineState");
+    engineXml->setAttribute("version", "1.5");
+
+    // 1. capturedSequence_（インポート／キャプチャ済みの元MIDIデータ）のシリアライズ
+    auto* capturedXml = engineXml->createNewChildElement("CapturedSequence");
+    for (const auto& ev : capturedCopy)
+    {
+        const int rawSize = ev.message.getRawDataSize();
+        if (rawSize <= 0 || ev.message.getRawData() == nullptr)
+            continue;
+
+        auto* evXml = capturedXml->createNewChildElement("Event");
+        evXml->setAttribute("ppq", ev.ppqPosition);
+        evXml->setAttribute("sample", juce::String(ev.samplePosition));
+
+        const juce::MemoryBlock rawMidiBlock(ev.message.getRawData(), static_cast<size_t>(rawSize));
+        evXml->setAttribute("midiBase64", rawMidiBlock.toBase64Encoding());
+    }
+
+    // 2. lockedBlocks_（各ブロックのLock状態および固定ボイシング）のシリアライズ
+    auto* lockedXml = engineXml->createNewChildElement("LockedBlocks");
+    for (const auto& block : lockedCopy)
+    {
+        auto* blockXml = lockedXml->createNewChildElement("LockedBlock");
+        blockXml->setAttribute("rootPc", block.rootPitchClass);
+        blockXml->setAttribute("quality", static_cast<int>(block.quality));
+        blockXml->setAttribute("startPpq", block.startPpq);
+        blockXml->setAttribute("durationPpq", block.durationPpq);
+        blockXml->setAttribute("baseVelocity", block.baseVelocity);
+        blockXml->setAttribute("hasTargetTop", block.targetTopNote.has_value());
+        blockXml->setAttribute("targetTop", block.targetTopNote.value_or(-1));
+        blockXml->setAttribute("isPassing", block.isPassingChord);
+
+        juce::StringArray noteTokens;
+        for (int noteNum : block.lockedVoicing.midiNotes)
+        {
+            noteTokens.add(juce::String(noteNum));
+        }
+        blockXml->setAttribute("notes", noteTokens.joinIntoString(","));
+    }
+
+    return engineXml;
+}
+
+void MidiReharmonizerEngine::restoreEngineStateFromXml(const juce::XmlElement& engineXml)
+{
+    if (!engineXml.hasTagName("EngineState"))
+        return;
+
+    std::vector<TimedMidiEvent> restoredCaptured;
+    const auto* capturedXml = engineXml.getChildByName("CapturedSequence");
+    if (capturedXml != nullptr)
+    {
+        for (const auto* evXml : capturedXml->getChildWithTagNameIterator("Event"))
+        {
+            const juce::String base64Midi = evXml->getStringAttribute("midiBase64");
+            if (base64Midi.isEmpty())
+                continue;
+
+            juce::MemoryBlock rawMidiBlock;
+            if (!rawMidiBlock.fromBase64Encoding(base64Midi) || rawMidiBlock.getSize() == 0)
+                continue;
+
+            TimedMidiEvent ev;
+            ev.ppqPosition    = std::max(0.0, evXml->getDoubleAttribute("ppq", 0.0));
+            ev.samplePosition = evXml->getStringAttribute("sample", "0").getLargeIntValue();
+            ev.message        = juce::MidiMessage(rawMidiBlock.getData(), static_cast<int>(rawMidiBlock.getSize()), ev.ppqPosition);
+            restoredCaptured.push_back(std::move(ev));
+        }
+    }
+
+    std::vector<ChordBlock> restoredLocked;
+    const auto* lockedXml = engineXml.getChildByName("LockedBlocks");
+    if (lockedXml != nullptr)
+    {
+        for (const auto* blockXml : lockedXml->getChildWithTagNameIterator("LockedBlock"))
+        {
+            ChordBlock block;
+            block.rootPitchClass = std::clamp(blockXml->getIntAttribute("rootPc", 0), 0, 11);
+
+            const int qualityInt = std::clamp(blockXml->getIntAttribute("quality", 0), 0, 8);
+            block.quality        = static_cast<ChordQuality>(qualityInt);
+            block.startPpq       = std::max(0.0, blockXml->getDoubleAttribute("startPpq", 0.0));
+            block.durationPpq    = std::max(0.05, blockXml->getDoubleAttribute("durationPpq", 1.0));
+            block.baseVelocity   = std::clamp(blockXml->getIntAttribute("baseVelocity", 90), 1, 127);
+
+            if (blockXml->getBoolAttribute("hasTargetTop", false))
+            {
+                const int top = blockXml->getIntAttribute("targetTop", -1);
+                if (top >= 0 && top <= 127)
+                    block.targetTopNote = top;
+            }
+
+            block.isPassingChord = blockXml->getBoolAttribute("isPassing", false);
+            block.isLocked       = true;
+
+            juce::StringArray noteTokens;
+            noteTokens.addTokens(blockXml->getStringAttribute("notes"), ",", "");
+            noteTokens.removeEmptyStrings(true);
+            for (const auto& token : noteTokens)
+            {
+                block.lockedVoicing.midiNotes.push_back(std::clamp(token.getIntValue(), 0, 127));
+            }
+
+            if (!block.lockedVoicing.isEmpty())
+            {
+                restoredLocked.push_back(std::move(block));
+            }
+        }
+
+        std::sort(restoredLocked.begin(), restoredLocked.end(),
+            [](const ChordBlock& a, const ChordBlock& b)
+            {
+                return a.startPpq < b.startPpq;
+            });
+    }
+
+    {
+        const juce::SpinLock::ScopedLockType lock(sequenceLock_);
+        if (capturedXml != nullptr)
+            capturedSequence_ = std::move(restoredCaptured);
+        if (lockedXml != nullptr)
+            lockedBlocks_ = std::move(restoredLocked);
+    }
+}
+
+void MidiReharmonizerEngine::setMelodyLockEnabled(bool enabled) noexcept
+{
+    melodyLock_.store(enabled, std::memory_order_release);
+    const juce::SpinLock::ScopedLockType lock(sequenceLock_);
+    activeProfile_.melodyLock = enabled;
+}
+
+bool MidiReharmonizerEngine::isMelodyLockEnabled() const noexcept
+{
+    return melodyLock_.load(std::memory_order_acquire);
+}
+
+void MidiReharmonizerEngine::setForceDiatonicEnabled(bool enabled) noexcept
+{
+    forceDiatonic_.store(enabled, std::memory_order_release);
+    const juce::SpinLock::ScopedLockType lock(sequenceLock_);
+    activeProfile_.forceDiatonic = enabled;
+}
+
+bool MidiReharmonizerEngine::isForceDiatonicEnabled() const noexcept
+{
+    return forceDiatonic_.load(std::memory_order_acquire);
+}
+
+void MidiReharmonizerEngine::setSongKeyPitchClass(int keyPitchClass) noexcept
+{
+    const int normalized = normalizePitchClass(keyPitchClass);
+    songKeyPitchClass_.store(normalized, std::memory_order_release);
+    const juce::SpinLock::ScopedLockType lock(sequenceLock_);
+    activeProfile_.songKeyPitchClass = normalized;
+}
+
+int MidiReharmonizerEngine::getSongKeyPitchClass() const noexcept
+{
+    return songKeyPitchClass_.load(std::memory_order_acquire);
+}
+
+void MidiReharmonizerEngine::setScaleType(ScaleType type) noexcept
+{
+    const int clamped = std::clamp(static_cast<int>(type), 0, 6);
+    scaleType_.store(clamped, std::memory_order_release);
+    const juce::SpinLock::ScopedLockType lock(sequenceLock_);
+    activeProfile_.scaleType = static_cast<ScaleType>(clamped);
+}
+
+ScaleType MidiReharmonizerEngine::getScaleType() const noexcept
+{
+    return static_cast<ScaleType>(std::clamp(scaleType_.load(std::memory_order_acquire), 0, 6));
+}
+
+void MidiReharmonizerEngine::setPedalBassModeEnabled(bool enabled) noexcept
+{
+    pedalBassMode_.store(enabled, std::memory_order_release);
+    const juce::SpinLock::ScopedLockType lock(sequenceLock_);
+    activeProfile_.pedalBassMode = enabled;
+}
+
+bool MidiReharmonizerEngine::isPedalBassModeEnabled() const noexcept
+{
+    return pedalBassMode_.load(std::memory_order_acquire);
+}
+
+void MidiReharmonizerEngine::setCompingStyle(CompingStyle style) noexcept
+{
+    const int clamped = std::clamp(static_cast<int>(style), 0, 2);
+    compingStyle_.store(clamped, std::memory_order_release);
+    const juce::SpinLock::ScopedLockType lock(sequenceLock_);
+    activeProfile_.compingStyle = static_cast<CompingStyle>(clamped);
+}
+
+CompingStyle MidiReharmonizerEngine::getCompingStyle() const noexcept
+{
+    return static_cast<CompingStyle>(std::clamp(compingStyle_.load(std::memory_order_acquire), 0, 2));
+}
+
+void MidiReharmonizerEngine::setSplitMidiChannelsEnabled(bool enabled) noexcept
+{
+    splitMidiChannels_.store(enabled, std::memory_order_release);
+    const juce::SpinLock::ScopedLockType lock(sequenceLock_);
+    activeProfile_.splitMidiChannels = enabled;
+}
+
+bool MidiReharmonizerEngine::isSplitMidiChannelsEnabled() const noexcept
+{
+    return splitMidiChannels_.load(std::memory_order_acquire);
 }
 
 void MidiReharmonizerEngine::setGrooveSyncEnabled(bool enabled) noexcept
@@ -443,40 +972,59 @@ void MidiReharmonizerEngine::updateRulesFromPresets(int genreIndex, int artistIn
     ArtistRules artist;
     switch (artistIndex)
     {
-        case 0: // Artist A (Smooth & Tight Voice Leading)
-            artist.spreadTargetSemitones = 14.0f;
-            artist.voiceLeadingWeight = 3.5f;
-            artist.topNoteLeapWeight = 4.0f;
+        case 0: // 1. Rootless Master (ex. Bill E.): omitRootPenalty無効化、minorSecondPenalty低減、密集和音とレイドバックを好む
+            artist.forceRootless = true;
+            artist.minorSecondPenaltyScale = 0.35f;
+            artist.preferredStyleOverride = VoicingStyle::Close;
+            artist.spreadTargetSemitones = 11.0f;
+            artist.voiceLeadingWeight = 3.6f;
+            artist.topNoteLeapWeight = 3.8f;
+            artist.bassNoteLeapWeight = 1.8f;
+            artist.timingJitterMs = 8.5f;
+            artist.strumSpreadMs = 14.0f;
+            artist.velocityHumanizeRange = 12.0f;
+            artist.topVoiceVelocityBoost = 11.0f;
+            artist.baseVelocityOffset = -4.0f;
+            break;
+
+        case 1: // 2. Quartal Power (ex. McCoy T.): 隣接声部が完全4度（5半音）の場合にコストを下げる評価、ベロシティ強め
+            artist.quartalIntervalBonus = 18.0f;
+            artist.spreadTargetSemitones = 15.0f;
+            artist.voiceLeadingWeight = 2.2f;
+            artist.topNoteLeapWeight = 2.6f;
+            artist.bassNoteLeapWeight = 2.0f;
             artist.timingJitterMs = 3.0f;
-            artist.strumSpreadMs = 6.0f;
-            artist.topVoiceVelocityBoost = 12.0f;
+            artist.strumSpreadMs = 3.0f;
+            artist.velocityHumanizeRange = 6.0f;
+            artist.topVoiceVelocityBoost = 16.0f;
+            artist.baseVelocityOffset = 14.0f;
             break;
-        case 1: // Artist B (Wide Expressive Strum)
-            artist.spreadTargetSemitones = 19.0f;
-            artist.voiceLeadingWeight = 1.8f;
-            artist.topNoteLeapWeight = 2.2f;
-            artist.timingJitterMs = 7.0f;
-            artist.strumSpreadMs = 18.0f;
-            artist.topVoiceVelocityBoost = 15.0f;
+
+        case 2: // 3. Melody & Bass (ex. Joe P.): VoicingStyle::Drop2を強く選好、ベース音とトップ音のVoice Leading重みを高く設定
+            artist.preferredStyleOverride = VoicingStyle::Drop2;
+            artist.styleMismatchPenaltyScale = 2.8f;
+            artist.spreadTargetSemitones = 16.0f;
+            artist.voiceLeadingWeight = 3.8f;
+            artist.topNoteLeapWeight = 5.5f;
+            artist.bassNoteLeapWeight = 4.5f;
+            artist.timingJitterMs = 4.5f;
+            artist.strumSpreadMs = 12.0f;
+            artist.velocityHumanizeRange = 9.0f;
+            artist.topVoiceVelocityBoost = 13.0f;
+            artist.baseVelocityOffset = 0.0f;
             break;
-        case 2: // Artist C (Rhythmic Drunk Groove)
-            artist.spreadTargetSemitones = 12.0f;
-            artist.voiceLeadingWeight = 2.5f;
-            artist.topNoteLeapWeight = 3.0f;
-            artist.timingJitterMs = 14.0f;
-            artist.strumSpreadMs = 10.0f;
-            artist.velocityHumanizeRange = 16.0f;
-            artist.topVoiceVelocityBoost = 6.0f;
-            break;
-        case 3: // Artist D (Minimal & Precise)
+
+        case 3: // 4. Standard (Default): 既存の標準的なバランス
         default:
             artist.spreadTargetSemitones = 16.0f;
-            artist.voiceLeadingWeight = 4.0f;
-            artist.topNoteLeapWeight = 4.5f;
-            artist.timingJitterMs = 1.5f;
-            artist.strumSpreadMs = 2.0f;
-            artist.velocityHumanizeRange = 4.0f;
-            artist.topVoiceVelocityBoost = 8.0f;
+            artist.voiceLeadingWeight = 2.5f;
+            artist.topNoteLeapWeight = 3.2f;
+            artist.bassNoteLeapWeight = 1.2f;
+            artist.timingJitterMs = 4.0f;
+            artist.strumSpreadMs = 7.0f;
+            artist.velocityHumanizeRange = 8.0f;
+            artist.topVoiceVelocityBoost = 10.0f;
+            artist.baseVelocityOffset = 0.0f;
             break;
     }
 
@@ -519,6 +1067,25 @@ juce::MidiMessageSequence MidiReharmonizerEngine::getReharmonizedMidiSequence(do
     const juce::SpinLock::ScopedLockType lock(sequenceLock_);
     for (const auto& ev : reharmonizedSequence_)
     {
+        juce::MidiMessage msg(ev.message);
+        msg.setTimeStamp(ev.ppqPosition * ticksPerQuarterNote);
+        seq.addEvent(msg);
+    }
+
+    seq.updateMatchedPairs();
+    return seq;
+}
+
+juce::MidiMessageSequence MidiReharmonizerEngine::getCapturedMidiSequence(double ticksPerQuarterNote) const
+{
+    juce::MidiMessageSequence seq;
+
+    const juce::SpinLock::ScopedLockType lock(sequenceLock_);
+    for (const auto& ev : capturedSequence_)
+    {
+        if (!ev.message.isNoteOnOrOff())
+            continue;
+
         juce::MidiMessage msg(ev.message);
         msg.setTimeStamp(ev.ppqPosition * ticksPerQuarterNote);
         seq.addEvent(msg);
@@ -615,6 +1182,7 @@ void MidiReharmonizerEngine::extractAuditionMidiForBlock(
             static_cast<int>(std::round(firstPartPpq / ppqPerSample))
         );
         outAuditionMidi.addEvent(juce::MidiMessage::allNotesOff(1), wrapSample);
+        outAuditionMidi.addEvent(juce::MidiMessage::allNotesOff(2), wrapSample);
 
         const double wrappedEndPpq = std::fmod(loopEndPpq, kLoopLengthPpq);
         emitRange(0.0, wrappedEndPpq, firstPartPpq);
@@ -634,7 +1202,9 @@ std::vector<Voicing> MidiReharmonizerEngine::generateCandidateVoicings(
     // 70% 以上 (Chaos: > 0.70f) ではオルタードテンションおよびモーダルインターチェンジを解禁
     const bool isChaosZone = (normMutation > 0.70f);
 
-    const bool useTritoneSub = !chord.isPassingChord
+    // ダイアトニックスケール拘束 (forceDiatonic) が有効な場合はスケール外の裏コード化を禁止
+    const bool useTritoneSub = !profile.forceDiatonic
+                               && !chord.isPassingChord
                                && !isBasicSafeZone
                                && ((profile.allowTritoneSub && chord.quality == ChordQuality::Dominant7)
                                    || (normMutation > 0.82f && (chord.quality == ChordQuality::Dominant7 || chord.quality == ChordQuality::Minor7)));
@@ -645,6 +1215,18 @@ std::vector<Voicing> MidiReharmonizerEngine::generateCandidateVoicings(
 
     const auto intervals = getChordIntervals(chord.quality);
 
+    // v1.5 和声の進化2 & 機能I: ダイアトニックスケール拘束 (Key Awareness + Scale/Mode拡張) 用のスケールマスク構築
+    std::array<bool, 12> diatonicScaleMask {};
+    if (profile.forceDiatonic)
+    {
+        const int keyPc = normalizePitchClass(profile.songKeyPitchClass);
+        const auto scaleIntervals = getScaleIntervals(profile.scaleType);
+        for (int scaleIv : scaleIntervals)
+        {
+            diatonicScaleMask[static_cast<size_t>(normalizePitchClass(keyPc + scaleIv))] = true;
+        }
+    }
+
     // 許容されるピッチクラス集合を構築
     std::array<bool, 12> allowedPitchClasses {};
     for (int iv : intervals.coreIntervals)
@@ -652,12 +1234,54 @@ std::vector<Voicing> MidiReharmonizerEngine::generateCandidateVoicings(
 
     if (!isBasicSafeZone && (profile.allowTensions || normMutation > 0.45f))
     {
-        for (int iv : intervals.tensionIntervals)
-            allowedPitchClasses[static_cast<size_t>(normalizePitchClass(effectiveRootPc + iv))] = true;
+        std::vector<int> candidateTensionIntervals = intervals.tensionIntervals;
+        if (profile.forceDiatonic)
+        {
+            // スケール／モード拘束ON時は、Lydian(#11=6)やDorian/MelodicMinor(13th=9)等のモード特性音も
+            // スケール内かつ非アボイドであればテンション候補として評価可能にする
+            constexpr std::array<int, 5> kModalTensionIntervals { 2, 5, 6, 8, 9 };
+            for (int modalIv : kModalTensionIntervals)
+            {
+                if (std::find(candidateTensionIntervals.begin(), candidateTensionIntervals.end(), modalIv) == candidateTensionIntervals.end()
+                    && std::find(intervals.coreIntervals.begin(), intervals.coreIntervals.end(), modalIv) == intervals.coreIntervals.end())
+                {
+                    candidateTensionIntervals.push_back(modalIv);
+                }
+            }
+        }
+
+        for (int iv : candidateTensionIntervals)
+        {
+            const int tensionPc = normalizePitchClass(effectiveRootPc + iv);
+
+            if (profile.forceDiatonic)
+            {
+                // 1) 指定された songKey と scaleType から生成されるスケールに属さないテンションを除外
+                if (!diatonicScaleMask[static_cast<size_t>(tensionPc)])
+                    continue;
+
+                // 2) コア構成音に対して半音上（短9度）で衝突するアボイドノート（例: Maj7/Dom7上のナチュラル11th、m7上のb13等）を除外
+                bool isAvoidNote = false;
+                for (int coreIv : intervals.coreIntervals)
+                {
+                    const int corePc = normalizePitchClass(effectiveRootPc + coreIv);
+                    if (normalizePitchClass(tensionPc - corePc) == 1)
+                    {
+                        isAvoidNote = true;
+                        break;
+                    }
+                }
+                if (isAvoidNote)
+                    continue;
+            }
+
+            allowedPitchClasses[static_cast<size_t>(tensionPc)] = true;
+        }
     }
 
-    // Chaos領域（70%〜100%）ではオルタードテンション（b9, #9, #11, b13）やモーダルインターチェンジ音を追加解禁
-    if (isChaosZone)
+    // Chaos領域（70%〜100%）では、裏コードが許可されているジャンル（allowTritoneSub == true）かつ
+    // ダイアトニックスケール拘束（forceDiatonic）がOFFの場合のみオルタードテンション（b9, #9, #11, b13）を追加解禁
+    if (isChaosZone && profile.allowTritoneSub && !profile.forceDiatonic)
     {
         constexpr std::array<int, 4> kAlteredAndModalIntervals { 1, 3, 6, 8 }; // b9, #9(m3), #11(b5), b13(#5)
         for (int altIv : kAlteredAndModalIntervals)
@@ -666,13 +1290,43 @@ std::vector<Voicing> MidiReharmonizerEngine::generateCandidateVoicings(
         }
     }
 
-    // 指定音域 [minPitch, maxPitch] 内で使用可能なMIDIノート番号を列挙
+    // v1.5 和声の進化1 & 3: Melody Lock（最高音固定）および Pedal Bass（最低音固定）の制約判定
+    const bool enforceMelodyLock = profile.melodyLock && chord.targetTopNote.has_value();
+    const bool enforcePedalBass  = profile.pedalBassMode && chord.forcedBassNote.has_value();
+
+    int lockedTopNote  = enforceMelodyLock ? std::clamp(*chord.targetTopNote, 24, 120) : -1;
+    int lockedBassNote = enforcePedalBass  ? std::clamp(*chord.forcedBassNote, 12, 108) : -1;
+
+    if (enforceMelodyLock && enforcePedalBass && lockedBassNote >= lockedTopNote - 4)
+    {
+        while (lockedBassNote >= lockedTopNote - 6 && lockedBassNote >= 24)
+        {
+            lockedBassNote -= 12;
+        }
+    }
+
+    const int minInnerPitch = enforcePedalBass  ? (lockedBassNote + 1) : profile.minPitch;
+    const int maxInnerPitch = enforceMelodyLock ? (lockedTopNote - 1)  : profile.maxPitch;
+
+    // 指定音域内で使用可能なMIDIノート番号を昇順で列挙
     std::vector<int> candidateNotes;
-    candidateNotes.reserve(36);
-    for (int pitch = profile.minPitch; pitch <= profile.maxPitch; ++pitch)
+    candidateNotes.reserve(40);
+
+    if (enforcePedalBass)
+    {
+        candidateNotes.push_back(lockedBassNote);
+    }
+
+    for (int pitch = minInnerPitch; pitch <= maxInnerPitch; ++pitch)
     {
         if (allowedPitchClasses[static_cast<size_t>(normalizePitchClass(pitch))])
             candidateNotes.push_back(pitch);
+    }
+
+    if (enforceMelodyLock)
+    {
+        if (candidateNotes.empty() || candidateNotes.back() != lockedTopNote)
+            candidateNotes.push_back(lockedTopNote);
     }
 
     std::vector<Voicing> results;
@@ -682,6 +1336,19 @@ std::vector<Voicing> MidiReharmonizerEngine::generateCandidateVoicings(
     results.reserve(512);
     // 計算爆発を防ぐための候補数上限ガード
     constexpr size_t kMaxCandidatesPerChord = 1024;
+
+    // Melody Lock や Pedal Bass で上下端が固定されている場合は、スパン制限やバス〜テナー間隔制限を自動拡張して候補枯渇を防ぐ
+    int effectiveMaxTotalSpan = profile.maxTotalSpan;
+    int effectiveMaxBassToTenor = profile.maxBassToTenorInterval;
+    if (enforceMelodyLock || enforcePedalBass)
+    {
+        effectiveMaxTotalSpan   = std::max(effectiveMaxTotalSpan, 42);
+        effectiveMaxBassToTenor = std::max(effectiveMaxBassToTenor, 26);
+        if (enforceMelodyLock && enforcePedalBass)
+        {
+            effectiveMaxTotalSpan = std::max(effectiveMaxTotalSpan, (lockedTopNote - lockedBassNote) + 2);
+        }
+    }
 
     std::vector<int> currentNotes;
     currentNotes.reserve(static_cast<size_t>(profile.maxVoices));
@@ -696,9 +1363,14 @@ std::vector<Voicing> MidiReharmonizerEngine::generateCandidateVoicings(
         const int currentCount = static_cast<int>(currentNotes.size());
         if (currentCount == targetVoiceCount)
         {
+            if (enforcePedalBass && currentNotes.front() != lockedBassNote)
+                return;
+            if (enforceMelodyLock && currentNotes.back() != lockedTopNote)
+                return;
+
             // 完成したボイシングの全体スパンチェック
             const int totalSpan = currentNotes.back() - currentNotes.front();
-            if (totalSpan >= 4 && totalSpan <= profile.maxTotalSpan)
+            if (totalSpan >= 4 && totalSpan <= effectiveMaxTotalSpan)
             {
                 results.push_back(Voicing { currentNotes });
             }
@@ -715,9 +1387,29 @@ std::vector<Voicing> MidiReharmonizerEngine::generateCandidateVoicings(
             const int nextPitch = candidateNotes[i];
             const int nextPc = normalizePitchClass(nextPitch);
 
+            // [Pedal Bass 拘束] 第1声（最低音）は必ず lockedBassNote に固定
+            if (enforcePedalBass && currentCount == 0 && nextPitch != lockedBassNote)
+                break;
+
+            // [Melody Lock 拘束] 最終声（最高音）は必ず lockedTopNote に固定し、内声は lockedTopNote 未満に制限
+            if (enforceMelodyLock)
+            {
+                if (currentCount == targetVoiceCount - 1)
+                {
+                    if (nextPitch != lockedTopNote)
+                        continue;
+                }
+                else if (nextPitch >= lockedTopNote)
+                {
+                    break;
+                }
+            }
+
             // [枝刈り1] 同一ピッチクラス（オクターブ重複）はボイシング内で最大2回まで、
-            //           かつルート・5th以外の重複は1回までに制限して不自然な重複と計算爆発を防ぐ
-            const bool isRoot = (nextPc == effectiveRootPc);
+            //           かつルート・ペダルベース・ロックメロディ以外の重複は1回までに制限して不自然な重複と計算爆発を防ぐ
+            const bool isFixedEndpoint = (enforcePedalBass && currentCount == 0)
+                                         || (enforceMelodyLock && currentCount == targetVoiceCount - 1);
+            const bool isRoot = (nextPc == effectiveRootPc) || isFixedEndpoint;
             const int maxPcDuplicates = isRoot ? 2 : 1;
             if (pitchClassCount[static_cast<size_t>(nextPc)] >= maxPcDuplicates)
                 continue;
@@ -729,14 +1421,16 @@ std::vector<Voicing> MidiReharmonizerEngine::generateCandidateVoicings(
                 const int totalSpanSoFar = nextPitch - currentNotes.front();
 
                 // [枝刈り2] 全体スパンが上限を超えたら、これ以降のノート（さらに高音）も全て超えるためbreakで枝刈り
-                if (totalSpanSoFar > profile.maxTotalSpan)
+                if (totalSpanSoFar > effectiveMaxTotalSpan)
                     break;
 
                 // [枝刈り3] 隣接声部間のインターバルが広すぎる配置をハードリミットで除外
-                //           最低音（Bass）と第2音の間は maxBassToTenorInterval、それより上は maxAdjacentInterval を適用
+                //           最低音（Bass）と第2音の間は effectiveMaxBassToTenor、それより上は maxAdjacentInterval を適用
                 const int maxAllowedGap = (currentCount == 1)
-                                              ? profile.maxBassToTenorInterval
-                                              : profile.maxAdjacentInterval;
+                                              ? effectiveMaxBassToTenor
+                                              : ((enforceMelodyLock && currentCount == targetVoiceCount - 1)
+                                                     ? std::max(profile.maxAdjacentInterval, 19)
+                                                     : profile.maxAdjacentInterval);
                 if (adjacentInterval > maxAllowedGap)
                     break;
 
@@ -794,7 +1488,8 @@ float MidiReharmonizerEngine::calculateStaticCost(
     const float chaosFactor = std::clamp((normMutation - 0.5f) * 2.0f, 0.0f, 1.0f);
     const float basicStrictness = std::clamp((0.5f - normMutation) * 2.0f, 0.0f, 1.0f);
 
-    const bool useTritoneSub = !chord.isPassingChord
+    const bool useTritoneSub = !profile.forceDiatonic
+                               && !chord.isPassingChord
                                && (normMutation >= 0.20f)
                                && ((profile.allowTritoneSub && chord.quality == ChordQuality::Dominant7)
                                    || (normMutation > 0.82f && (chord.quality == ChordQuality::Dominant7 || chord.quality == ChordQuality::Minor7)));
@@ -821,6 +1516,12 @@ float MidiReharmonizerEngine::calculateStaticCost(
         else if (interval == 2 && lowerNote < 60)
         {
             cost += profile.minorSecondPenalty * 0.25f * safetyPenaltyScale;
+        }
+
+        // v1.5 機能D (Quartal Power / McCoy T.): 隣接声部が完全4度（インターバル5）の場合にコストを下げる評価
+        if (interval == 5 && profile.quartalIntervalBonus > 0.0f)
+        {
+            cost -= profile.quartalIntervalBonus;
         }
 
         // Low Interval Limit 違反ペナルティ
@@ -870,7 +1571,16 @@ float MidiReharmonizerEngine::calculateStaticCost(
     }
 
     if (!hasRoot)
-        cost += profile.omitRootPenalty * safetyPenaltyScale;
+    {
+        // ペダルポイント・モード（分数コード状態）では最低音がペダル音で固定されるためルート省略ペナルティを免除
+        if (!profile.pedalBassMode)
+            cost += profile.omitRootPenalty * safetyPenaltyScale;
+    }
+    else if (profile.forceRootless)
+    {
+        // v1.5 機能D (Rootless Master / Bill E.): ルート音を省略した密集テンション配置を積極的に選好
+        cost += 14.0f * safetyPenaltyScale;
+    }
     if (!hasThird)
         cost += profile.guideToneMissingPenalty * safetyPenaltyScale;
     if (!hasSeventh)
@@ -903,11 +1613,28 @@ float MidiReharmonizerEngine::calculateStaticCost(
             cost += profile.styleMismatchPenalty * safetyPenaltyScale;
     }
 
-    // 5. ターゲット・トップノート（元のメロディ音）が指定されている場合の追従コスト
+    // 5. ターゲット・トップノート（元のメロディ音）が指定されている場合の追従コスト ＆ Melody Lock 絶対維持チェック
     if (chord.targetTopNote.has_value())
     {
         const int topDiff = std::abs(currentVoicing.getTopNote() - *chord.targetTopNote);
-        cost += static_cast<float>(topDiff) * 1.5f * (1.0f - chaosFactor * 0.85f);
+        if (profile.melodyLock && topDiff != 0)
+        {
+            cost += 1.0e5f + static_cast<float>(topDiff) * 1000.0f;
+        }
+        else
+        {
+            cost += static_cast<float>(topDiff) * 1.5f * (1.0f - chaosFactor * 0.85f);
+        }
+    }
+
+    // 6. ペダルポイント・モード (Pedal Bass) 有効時の最低音一致チェック
+    if (profile.pedalBassMode && chord.forcedBassNote.has_value())
+    {
+        const int bassDiff = std::abs(currentVoicing.getBassNote() - *chord.forcedBassNote);
+        if (bassDiff != 0)
+        {
+            cost += 1.0e5f + static_cast<float>(bassDiff) * 1000.0f;
+        }
     }
 
     return cost;
@@ -963,9 +1690,12 @@ float MidiReharmonizerEngine::calculateTransitionCost(
     const float normalizedMovement = voiceLeadingDistance / static_cast<float>(currNotes.size());
     float transitionCost = normalizedMovement * profile.voiceLeadingWeight * vlScale;
 
-    // トップノート（最高音）の跳躍ペナルティも Mutation に応じてスケール
+    // トップノート（最高音）およびベースノート（最低音）の跳躍ペナルティも Mutation ＆ 達人スタイルに応じてスケール
     const float topNoteLeap = static_cast<float>(std::abs(currentVoicing.getTopNote() - prevVoicing.getTopNote()));
     transitionCost += topNoteLeap * profile.topNoteLeapWeight * vlScale;
+
+    const float bassNoteLeap = static_cast<float>(std::abs(currentVoicing.getBassNote() - prevVoicing.getBassNote()));
+    transitionCost += bassNoteLeap * profile.bassNoteLeapWeight * vlScale;
 
     return transitionCost;
 }
@@ -1006,18 +1736,88 @@ std::vector<Voicing> MidiReharmonizerEngine::findOptimalVoicingPath(
     const size_t numSteps = progression.size();
     std::vector<std::vector<TrellisNode>> trellis(numSteps);
 
+    // v1.5 和声の進化3: ペダルポイント・モード (Pedal Bass) の基準最低音を算出
+    // 進行の最初のコードのベース音（またはダイアトニック拘束ON時は楽曲キーの主音 I度）を全ステップの最低音として固定
+    std::optional<int> pedalBassMidiNote;
+    if (profile.pedalBassMode)
+    {
+        if (progression.front().forcedBassNote.has_value())
+        {
+            pedalBassMidiNote = *progression.front().forcedBassNote;
+        }
+        else if (!profile.forceDiatonic
+                 && progression.front().originalBassNote.has_value()
+                 && *progression.front().originalBassNote >= profile.minPitch - 5
+                 && *progression.front().originalBassNote <= profile.minPitch + 14)
+        {
+            pedalBassMidiNote = *progression.front().originalBassNote;
+        }
+        else
+        {
+            const int pedalPc = profile.forceDiatonic
+                                    ? normalizePitchClass(profile.songKeyPitchClass)
+                                    : (progression.front().originalBassNote.has_value()
+                                           ? normalizePitchClass(*progression.front().originalBassNote)
+                                           : normalizePitchClass(progression.front().rootPitchClass));
+            int candidateBass = profile.minPitch;
+            while (normalizePitchClass(candidateBass) != pedalPc)
+            {
+                ++candidateBass;
+            }
+            pedalBassMidiNote = candidateBass;
+        }
+    }
+
     // 1. 各時間ステップ（各コードブロック）の候補生成と動的計画法による前方確率（最小累積コスト）計算
     for (size_t t = 0; t < numSteps; ++t)
     {
-        auto candidates = generateCandidateVoicings(progression[t], profile);
+        ChordBlock stepChord = progression[t];
+        if (pedalBassMidiNote.has_value() && !stepChord.forcedBassNote.has_value())
+        {
+            stepChord.forcedBassNote = pedalBassMidiNote;
+        }
 
-        // 万が一ハードリミットが厳しすぎて候補が0件になった場合のフォールバック（ルート＋3rd＋7thの基本形）
+        std::vector<Voicing> candidates;
+
+        // v1.5 機能B: ロック（ピン留め）されているブロックは前回のボイシング結果をそのままパススルー
+        if (stepChord.isLocked && !stepChord.lockedVoicing.isEmpty())
+        {
+            candidates.push_back(stepChord.lockedVoicing);
+        }
+        else
+        {
+            candidates = generateCandidateVoicings(stepChord, profile);
+        }
+
+        // 万が一ハードリミットが厳しすぎて候補が0件になった場合のフォールバック（Melody Lock / Pedal Bass も維持）
         if (candidates.empty())
         {
-            const int baseMidi = std::clamp(60 + normalizePitchClass(progression[t].rootPitchClass) - 12,
-                                            profile.minPitch,
-                                            profile.maxPitch - 12);
-            candidates.push_back(Voicing { { baseMidi, baseMidi + 4, baseMidi + 7, baseMidi + 11 } });
+            const int baseMidi = (profile.pedalBassMode && stepChord.forcedBassNote.has_value())
+                                     ? std::clamp(*stepChord.forcedBassNote, 12, 96)
+                                     : std::clamp(60 + normalizePitchClass(stepChord.rootPitchClass) - 12,
+                                                  profile.minPitch,
+                                                  profile.maxPitch - 12);
+            const int rootUpper = std::max(baseMidi + 5, 48 + normalizePitchClass(stepChord.rootPitchClass));
+            const auto chordIv  = getChordIntervals(stepChord.quality);
+            const int thirdIv   = chordIv.thirdInterval >= 0 ? chordIv.thirdInterval : 4;
+            const int seventhIv = chordIv.seventhInterval >= 0 ? chordIv.seventhInterval : 7;
+
+            int v1 = baseMidi;
+            int v2 = rootUpper + thirdIv;
+            int v3 = rootUpper + 7;
+            int v4 = (profile.melodyLock && stepChord.targetTopNote.has_value())
+                         ? std::clamp(*stepChord.targetTopNote, v1 + 7, 120)
+                         : (rootUpper + seventhIv);
+
+            if (v3 >= v4)
+                v3 = std::max(v1 + 4, v4 - 3);
+            if (v2 >= v3)
+                v2 = std::max(v1 + 2, v3 - 3);
+
+            std::vector<int> fallbackNotes { v1, v2, v3, v4 };
+            std::sort(fallbackNotes.begin(), fallbackNotes.end());
+            fallbackNotes.erase(std::unique(fallbackNotes.begin(), fallbackNotes.end()), fallbackNotes.end());
+            candidates.push_back(Voicing { std::move(fallbackNotes) });
         }
 
         auto& currentLayer = trellis[t];
@@ -1030,7 +1830,7 @@ std::vector<Voicing> MidiReharmonizerEngine::findOptimalVoicingPath(
             {
                 currentLayer[j].voicing = std::move(candidates[j]);
                 currentLayer[j].minCumulativeCost = calculateStaticCost(
-                    currentLayer[j].voicing, progression[0], profile);
+                    currentLayer[j].voicing, stepChord, profile);
                 currentLayer[j].backpointer = -1;
             }
         }
@@ -1043,7 +1843,7 @@ std::vector<Voicing> MidiReharmonizerEngine::findOptimalVoicingPath(
             {
                 currentLayer[j].voicing = std::move(candidates[j]);
                 const float staticCost = calculateStaticCost(
-                    currentLayer[j].voicing, progression[t], profile);
+                    currentLayer[j].voicing, stepChord, profile);
 
                 float bestCost = std::numeric_limits<float>::infinity();
                 int bestPrevIdx = 0;
@@ -1257,6 +2057,11 @@ std::vector<ChordBlock> MidiReharmonizerEngine::subdivideAndInsertPassingChords(
         const int targetRootPc = normalizePitchClass(targetNext.rootPitchClass);
         const double totalSpanPpq = current.durationPpq;
 
+        // Melody Lock が ON の場合はパッシングコード挿入時も元のブロックの最高音（targetTopNote）を絶対維持
+        const std::optional<int> passingTargetTop = profile.melodyLock
+                                                        ? current.targetTopNote
+                                                        : targetNext.targetTopNote;
+
         // 元のコードの終端時刻（startPpq + durationPpq）と次のコードの開始時刻から実質グリッド幅を推定
         const double nextStartPpq = (i + 1 < numBlocks)
                                         ? baseProgression[i + 1].startPpq
@@ -1265,7 +2070,7 @@ std::vector<ChordBlock> MidiReharmonizerEngine::subdivideAndInsertPassingChords(
 
         // Chaos極限領域（85%〜100%）かつ1小節（約3.4拍以上）の長い白玉コードの場合：
         // バップのように3分割〜4分割し、「裏コードのさらに裏」や連続ドミナント・チェインを挿入
-        if (mutation >= 92.0f && gridSlotPpq >= 3.4)
+        if (mutation >= 92.0f && gridSlotPpq >= 3.4 && !profile.forceDiatonic)
         {
             // 4分割（1拍ずつ: 基本コード -> アプローチIIm7b5/裏の裏の裏 -> 裏コードの裏(V7/bII7) -> 裏コード(bII7) -> ターゲット）
             const double stepPpq = gridSlotPpq * 0.25;
@@ -1285,23 +2090,29 @@ std::vector<ChordBlock> MidiReharmonizerEngine::subdivideAndInsertPassingChords(
 
             // Beat 2: Pre-Approach (Related Minor7b5 or Dominant7)
             ChordBlock beat2 = computeApproachChordForTarget(
-                current, subOfSubRoot, current.startPpq + stepPpq, noteDur, true, targetNext.targetTopNote);
+                current, subOfSubRoot, current.startPpq + stepPpq, noteDur, true, passingTargetTop);
             beat2.rootPitchClass = preApproachRoot;
             beat2.quality = ((i % 2) == 0) ? ChordQuality::Minor7b5 : ChordQuality::Dominant7;
+            if (profile.melodyLock)
+                beat2.targetTopNote = current.targetTopNote;
             result.push_back(beat2);
 
             // Beat 3: 裏コードのさらに裏 (Dominant7 resolving to bII7)
             ChordBlock beat3 = computeApproachChordForTarget(
-                current, tritoneSubRoot, current.startPpq + stepPpq * 2.0, noteDur, false, targetNext.targetTopNote);
+                current, tritoneSubRoot, current.startPpq + stepPpq * 2.0, noteDur, false, passingTargetTop);
             beat3.rootPitchClass = subOfSubRoot;
+            if (profile.melodyLock)
+                beat3.targetTopNote = current.targetTopNote;
             result.push_back(beat3);
 
             // Beat 4: ターゲットへ半音下行解決する裏コード (Tritone Substitution: bII7)
             ChordBlock beat4 = computeApproachChordForTarget(
-                current, targetRootPc, current.startPpq + stepPpq * 3.0, noteDur, true, targetNext.targetTopNote);
+                current, targetRootPc, current.startPpq + stepPpq * 3.0, noteDur, true, passingTargetTop);
+            if (profile.melodyLock)
+                beat4.targetTopNote = current.targetTopNote;
             result.push_back(beat4);
         }
-        else if (mutation >= 80.0f && gridSlotPpq >= 3.4)
+        else if (mutation >= 80.0f && gridSlotPpq >= 3.4 && !profile.forceDiatonic)
         {
             // 3分割（前半2拍: 基本コード -> 3拍目: 裏コードの裏 / Related II -> 4拍目: 裏コード）
             const double halfPpq    = gridSlotPpq * 0.5;
@@ -1321,8 +2132,10 @@ std::vector<ChordBlock> MidiReharmonizerEngine::subdivideAndInsertPassingChords(
                 current.startPpq + halfPpq,
                 std::max(0.20, quarterPpq - kNoteGapPpq),
                 (i % 2) == 0,
-                targetNext.targetTopNote
+                passingTargetTop
             );
+            if (profile.melodyLock)
+                preApproach.targetTopNote = current.targetTopNote;
             result.push_back(preApproach);
 
             // 後半2（4拍目）: ターゲットへ向かう裏コード (bII7)
@@ -1332,8 +2145,10 @@ std::vector<ChordBlock> MidiReharmonizerEngine::subdivideAndInsertPassingChords(
                 current.startPpq + halfPpq + quarterPpq,
                 std::max(0.20, quarterPpq - kNoteGapPpq),
                 true,
-                targetNext.targetTopNote
+                passingTargetTop
             );
+            if (profile.melodyLock)
+                finalApproach.targetTopNote = current.targetTopNote;
             result.push_back(finalApproach);
         }
         else
@@ -1351,10 +2166,9 @@ std::vector<ChordBlock> MidiReharmonizerEngine::subdivideAndInsertPassingChords(
 
             // 2. 後半ブロック（アプローチ領域: 裏コード or セカンダリードミナント）
             // 元のコード自体が既にセカンダリードミナント（V7/target）である場合は、必ず裏コード（bII7）へ変化させて動きを作る
+            // ただし forceDiatonic が ON の場合は裏コード化を禁止
             const bool isAlreadySecondaryDom = (normalizePitchClass(current.rootPitchClass) == normalizePitchClass(targetRootPc + 7));
-            const bool useTritoneSub = isAlreadySecondaryDom
-                                       || profile.allowTritoneSub
-                                       || (mutation >= 48.0f);
+            const bool useTritoneSub = !profile.forceDiatonic && (profile.allowTritoneSub || isAlreadySecondaryDom);
 
             ChordBlock passingChord = computeApproachChordForTarget(
                 current,
@@ -1362,8 +2176,10 @@ std::vector<ChordBlock> MidiReharmonizerEngine::subdivideAndInsertPassingChords(
                 secondStart,
                 secondDur,
                 useTritoneSub,
-                targetNext.targetTopNote
+                passingTargetTop
             );
+            if (profile.melodyLock)
+                passingChord.targetTopNote = current.targetTopNote;
             result.push_back(passingChord);
         }
     }
@@ -1374,14 +2190,88 @@ std::vector<ChordBlock> MidiReharmonizerEngine::subdivideAndInsertPassingChords(
 //==============================================================================
 // オフライン・リハーモナイズ実行パイプライン
 //==============================================================================
+std::vector<ChordBlock> MidiReharmonizerEngine::applyLockedBlocksToProgression(
+    std::span<const ChordBlock> candidateProgression,
+    std::span<const ChordBlock> lockedBlocks)
+{
+    if (lockedBlocks.empty())
+    {
+        return { candidateProgression.begin(), candidateProgression.end() };
+    }
+
+    std::vector<ChordBlock> current(candidateProgression.begin(), candidateProgression.end());
+    constexpr double kGapPpq = 0.08;
+
+    for (const auto& locked : lockedBlocks)
+    {
+        const double lockStart = locked.startPpq;
+        const double lockEnd   = locked.startPpq + locked.durationPpq;
+
+        std::vector<ChordBlock> nextPass;
+        nextPass.reserve(current.size() + 2);
+
+        for (const auto& cand : current)
+        {
+            const double candStart = cand.startPpq;
+            const double candEnd   = cand.startPpq + cand.durationPpq;
+
+            // ロック区間と重ならない候補ブロックはそのまま維持
+            if (candEnd <= lockStart + 0.12 || candStart >= lockEnd - 0.12)
+            {
+                nextPass.push_back(cand);
+                continue;
+            }
+
+            // 候補ブロックの前半がロック区間より前に突き出している場合は前半部分だけ残す
+            if (candStart < lockStart - 0.25)
+            {
+                ChordBlock leftPart = cand;
+                leftPart.durationPpq = std::max(0.25, lockStart - candStart - kGapPpq);
+                leftPart.isLocked = false;
+                leftPart.lockedVoicing = {};
+                nextPass.push_back(leftPart);
+            }
+
+            // 候補ブロックの後半がロック区間より後に突き出している場合は後半部分だけ残す
+            if (candEnd > lockEnd + 0.25)
+            {
+                ChordBlock rightPart = cand;
+                rightPart.startPpq = lockEnd + kGapPpq;
+                rightPart.durationPpq = std::max(0.25, candEnd - rightPart.startPpq);
+                rightPart.isLocked = false;
+                rightPart.lockedVoicing = {};
+                nextPass.push_back(rightPart);
+            }
+        }
+
+        ChordBlock pinned = locked;
+        pinned.isLocked = true;
+        nextPass.push_back(pinned);
+
+        std::sort(nextPass.begin(), nextPass.end(),
+            [](const ChordBlock& a, const ChordBlock& b)
+            {
+                return a.startPpq < b.startPpq;
+            });
+
+        current = std::move(nextPass);
+    }
+
+    return current;
+}
+
 bool MidiReharmonizerEngine::triggerOfflineReharmonize(bool usePreviewProgressionIfEmpty)
 {
     std::vector<ChordBlock> progression;
+    std::vector<ChordBlock> lockedCopy;
+    std::vector<TimedMidiEvent> capturedCopy;
     VoicingProfile profileCopy;
 
     {
         const juce::SpinLock::ScopedLockType lock(sequenceLock_);
-        profileCopy = activeProfile_;
+        profileCopy  = activeProfile_;
+        lockedCopy   = lockedBlocks_;
+        capturedCopy = capturedSequence_;
         if (!capturedSequence_.empty())
         {
             progression = extractChordProgressionFromCaptured();
@@ -1392,31 +2282,144 @@ bool MidiReharmonizerEngine::triggerOfflineReharmonize(bool usePreviewProgressio
     // デフォルトの2-5-1-6進行（Dm7 -> G7 -> Cmaj7 -> A7）を生成
     if (progression.empty() && usePreviewProgressionIfEmpty)
     {
-        progression = {
-            ChordBlock { 2, ChordQuality::Minor7,    0.0,  3.8, 88, 72 }, // Dm7
-            ChordBlock { 7, ChordQuality::Dominant7, 4.0,  3.8, 92, 71 }, // G7
-            ChordBlock { 0, ChordQuality::Major7,    8.0,  3.8, 86, 71 }, // Cmaj7
-            ChordBlock { 9, ChordQuality::Dominant7, 12.0, 3.8, 90, 69 }  // A7
-        };
+        ChordBlock b0 { 2, ChordQuality::Minor7,    0.0,  3.8, 88, 72 };
+        b0.originalPitches = { 50, 57, 60, 65, 72 };
+        ChordBlock b1 { 7, ChordQuality::Dominant7, 4.0,  3.8, 92, 71 };
+        b1.originalPitches = { 43, 53, 59, 62, 71 };
+        ChordBlock b2 { 0, ChordQuality::Major7,    8.0,  3.8, 86, 71 };
+        b2.originalPitches = { 48, 55, 59, 64, 71 };
+        ChordBlock b3 { 9, ChordQuality::Dominant7, 12.0, 3.8, 90, 69 };
+        b3.originalPitches = { 45, 55, 61, 64, 69 };
+        progression = { b0, b1, b2, b3 };
     }
 
     if (progression.empty())
         return false;
 
+    const int currentTranspose   = std::clamp(transposeSemitones_.load(std::memory_order_relaxed), -12, 12);
+    const bool isCompareOriginal = compareOriginalMode_.load(std::memory_order_acquire);
+    const bool isZeroMutation    = (profileCopy.mutationAmount < 0.1f);
+
+    //==========================================================================
+    // v1.5 機能F: 「原曲完全再現モード (Mutation < 0.1%)」および「A/Bコンペア (Original)」
+    //             Viterbiアルゴリズムおよびパッシングコード分割を完全にスキップし、
+    //             capturedSequence_（元MIDI）のノート情報をそのまま純粋な形でパススルー出力する
+    //==========================================================================
+    if (isCompareOriginal || isZeroMutation)
+    {
+        if (!isCompareOriginal && !lockedCopy.empty())
+        {
+            progression = applyLockedBlocksToProgression(progression, lockedCopy);
+        }
+
+        std::vector<Voicing> originalVoicings;
+        originalVoicings.reserve(progression.size());
+        for (const auto& block : progression)
+        {
+            if (!isCompareOriginal && block.isLocked && !block.lockedVoicing.isEmpty())
+            {
+                originalVoicings.push_back(block.lockedVoicing);
+            }
+            else if (!block.originalPitches.empty())
+            {
+                Voicing v;
+                v.midiNotes = block.originalPitches;
+                originalVoicings.push_back(std::move(v));
+            }
+            else
+            {
+                const int rootNote = 48 + normalizePitchClass(block.rootPitchClass);
+                Voicing v;
+                v.midiNotes = { rootNote, rootNote + 4, rootNote + 7, rootNote + 11 };
+                originalVoicings.push_back(std::move(v));
+            }
+        }
+
+        std::vector<TimedMidiEvent> passthroughEvents;
+        if (!capturedCopy.empty() && (isCompareOriginal || lockedCopy.empty()))
+        {
+            // capturedSequence_ のノート・ベロシティ・発音タイミングを100%純粋にパススルーコピー（TransposeおよびCh.1/2分離のみ反映）
+            passthroughEvents = capturedCopy;
+            for (auto& ev : passthroughEvents)
+            {
+                if (!ev.message.isNoteOnOrOff())
+                    continue;
+
+                const int rawPitch = ev.message.getNoteNumber();
+                int targetChannel  = 1;
+
+                if (profileCopy.splitMidiChannels)
+                {
+                    bool isBassNote = false;
+                    for (const auto& b : progression)
+                    {
+                        if (ev.ppqPosition >= b.startPpq - 0.25 && ev.ppqPosition <= b.startPpq + b.durationPpq + 0.25)
+                        {
+                            const int bassPitch = b.originalBassNote.value_or(
+                                b.originalPitches.empty() ? -1 : b.originalPitches.front());
+                            if (rawPitch == bassPitch)
+                                isBassNote = true;
+                            break;
+                        }
+                    }
+                    targetChannel = isBassNote ? 1 : 2;
+                }
+
+                ev.message.setChannel(targetChannel);
+                if (currentTranspose != 0)
+                {
+                    const int shifted = std::clamp(rawPitch + currentTranspose, 0, 127);
+                    ev.message.setNoteNumber(shifted);
+                }
+            }
+        }
+        else
+        {
+            // 特定ブロックのみ手動ロック・ホイール転回されている場合は、揺らぎ無しの純粋な設定で各ブロックを描画
+            VoicingProfile cleanProfile = profileCopy;
+            cleanProfile.timingJitterMs        = 0.0f;
+            cleanProfile.strumSpreadMs         = 0.0f;
+            cleanProfile.velocityHumanizeRange = 0.0f;
+            cleanProfile.topVoiceVelocityBoost = 0.0f;
+            cleanProfile.baseVelocityOffset    = 0.0f;
+            cleanProfile.compingStyle          = CompingStyle::Sustained;
+            passthroughEvents = renderVoicingPathToMidiEvents(progression, originalVoicings, cleanProfile);
+        }
+
+        {
+            const juce::SpinLock::ScopedLockType lock(sequenceLock_);
+            lastProgression_            = std::move(progression);
+            lastOptimalVoicings_        = std::move(originalVoicings);
+            reharmonizedSequence_       = std::move(passthroughEvents);
+            renderedTransposeSemitones_ = currentTranspose;
+        }
+
+        return true;
+    }
+
     // Phase 13: ボイシング探索の前段階で Harmonic Rhythm を動的に分割し、
     //           直後のターゲットコードへ向かうパッシングコード（裏コード・セカンダリードミナント等）を挿入
     progression = subdivideAndInsertPassingChords(progression, profileCopy);
+
+    // v1.5 機能B: ロック（ピン留め）されているコードブロックを進行へ統合
+    if (!lockedCopy.empty())
+    {
+        progression = applyLockedBlocksToProgression(progression, lockedCopy);
+    }
 
     // Phase 3 & 13: 分割されたパッシングコードを含む全時間ステップを Viterbi トレリスへ統合し、
     //               曲全体を通して最もボイスリーディングが滑らかな最適ボイシング経路を探索
     const auto optimalVoicings = findOptimalVoicingPath(progression, profileCopy);
 
-    // 発音タイミング変調（ストラム／ジッター）およびベロシティ変調を適用してMIDIイベント列へ変換
+    // 発音タイミング変調（ストラム／ジッター）、ベロシティ変調、およびトランスポーズ（移調）を適用してMIDIイベント列へ変換
     auto generatedEvents = renderVoicingPathToMidiEvents(progression, optimalVoicings, profileCopy);
 
     {
         const juce::SpinLock::ScopedLockType lock(sequenceLock_);
-        reharmonizedSequence_ = std::move(generatedEvents);
+        lastProgression_           = std::move(progression);
+        lastOptimalVoicings_       = optimalVoicings;
+        reharmonizedSequence_      = std::move(generatedEvents);
+        renderedTransposeSemitones_ = currentTranspose;
     }
 
     return true;
@@ -1476,6 +2479,7 @@ std::vector<ChordBlock> MidiReharmonizerEngine::extractChordProgressionFromCaptu
         double clusterEndPpq = notes[i].endPpq;
         int velocitySum = 0;
         int maxPitch = -1;
+        int minPitch = 128;
         std::vector<int> clusterPitches;
 
         while (i < notes.size() && (notes[i].startPpq - clusterStartPpq) <= kChordOnsetTolerancePpq)
@@ -1484,6 +2488,7 @@ std::vector<ChordBlock> MidiReharmonizerEngine::extractChordProgressionFromCaptu
             clusterEndPpq = std::max(clusterEndPpq, notes[i].endPpq);
             velocitySum += notes[i].velocity;
             maxPitch = std::max(maxPitch, notes[i].pitch);
+            minPitch = std::min(minPitch, notes[i].pitch);
             ++i;
         }
 
@@ -1494,6 +2499,12 @@ std::vector<ChordBlock> MidiReharmonizerEngine::extractChordProgressionFromCaptu
         block.baseVelocity = std::clamp(velocitySum / static_cast<int>(clusterPitches.size()), 1, 127);
         if (maxPitch >= 0)
             block.targetTopNote = maxPitch;
+        if (minPitch <= 127)
+            block.originalBassNote = minPitch;
+
+        std::sort(clusterPitches.begin(), clusterPitches.end());
+        clusterPitches.erase(std::unique(clusterPitches.begin(), clusterPitches.end()), clusterPitches.end());
+        block.originalPitches = std::move(clusterPitches);
 
         blocks.push_back(block);
     }
@@ -1522,7 +2533,7 @@ std::vector<TimedMidiEvent> MidiReharmonizerEngine::renderVoicingPathToMidiEvent
 {
     std::vector<TimedMidiEvent> events;
     const size_t count = std::min(progression.size(), voicings.size());
-    events.reserve(count * 10);
+    events.reserve(count * 16);
 
     // 決定論的シードによる乱数生成器（オフライン再実行時の再現性を担保）
     std::mt19937 rng(20261028u);
@@ -1532,49 +2543,200 @@ std::vector<TimedMidiEvent> MidiReharmonizerEngine::renderVoicingPathToMidiEvent
     // 基準テンポ120BPM相当でのミリ秒 -> PPQ変換係数 (120BPM = 1秒に2拍 = 500ms/PPQ)
     constexpr double kPpqPerMsAt120Bpm = 1.0 / 500.0;
 
+    // v1.5 機能A: 出力直前のMIDIノート番号に対する一括トランスポーズ（移調）量 (-12 〜 +12 半音)
+    const int transposeShift = std::clamp(transposeSemitones_.load(std::memory_order_relaxed), -12, 12);
+
+    // コンピング用の1打（発音オフセットPPQ・長さPPQ・ベロシティ倍率）を表す構造体
+    struct CompingHit
+    {
+        double offsetPpq { 0.0 };
+        double durationPpq { 1.0 };
+        float velocityScale { 1.0f };
+    };
+
+    // v1.5 機能H: ベース声部（最低音 v==0）は常に Ch.1、上声部（v>=1）は splitMidiChannels ON時に Ch.2 へ出力
+    const int bassChannel  = 1;
+    const int upperChannel = profile.splitMidiChannels ? 2 : 1;
+
+    auto emitVoiceNote = [&](int noteNumber,
+                             int midiChannel,
+                             bool isTopVoice,
+                             size_t voiceIndex,
+                             double hitStartPpq,
+                             double hitDurationPpq,
+                             int baseVelocity,
+                             float velocityScale)
+    {
+        // ストラム遅延（下からv番目の声部に応じて発音タイミングをずらす）＋ランダムジッター
+        const double strumOffsetMs  = static_cast<double>(voiceIndex) * static_cast<double>(profile.strumSpreadMs);
+        const double jitterOffsetMs = static_cast<double>(jitterDist(rng));
+        const double totalOffsetPpq = (strumOffsetMs + jitterOffsetMs) * kPpqPerMsAt120Bpm;
+
+        const double noteOnPpq  = std::max(0.0, hitStartPpq + totalOffsetPpq);
+        const double noteOffPpq = std::max(noteOnPpq + 0.05, hitStartPpq + hitDurationPpq);
+
+        // ベロシティ変調（全体オフセット＋トップノート強調＋コンピング抑揚＋ヒューマナイズ）
+        const float boost     = isTopVoice ? profile.topVoiceVelocityBoost : 0.0f;
+        const float rawVel    = (static_cast<float>(baseVelocity) + profile.baseVelocityOffset + boost) * velocityScale
+                                + velDist(rng);
+        const int finalVelocity = std::clamp(static_cast<int>(std::round(rawVel)), 1, 127);
+
+        TimedMidiEvent onEv;
+        onEv.ppqPosition = noteOnPpq;
+        onEv.message     = juce::MidiMessage::noteOn(midiChannel, noteNumber, static_cast<juce::uint8>(finalVelocity));
+        events.push_back(onEv);
+
+        TimedMidiEvent offEv;
+        offEv.ppqPosition = noteOffPpq;
+        offEv.message     = juce::MidiMessage::noteOff(midiChannel, noteNumber);
+        events.push_back(offEv);
+    };
+
     for (size_t step = 0; step < count; ++step)
     {
-        const auto& chord = progression[step];
+        const auto& chord   = progression[step];
         const auto& voicing = voicings[step];
-
         const size_t numVoices = voicing.midiNotes.size();
-        for (size_t v = 0; v < numVoices; ++v)
+        if (numVoices == 0)
+            continue;
+
+        // 1. "Sustained (白玉)": 全声部が同時に発音し、ブロック長まで伸びる
+        if (profile.compingStyle == CompingStyle::Sustained)
         {
-            const int noteNumber = voicing.midiNotes[v];
-            const bool isTopVoice = (v + 1 == numVoices);
+            for (size_t v = 0; v < numVoices; ++v)
+            {
+                const int noteNumber  = std::clamp(voicing.midiNotes[v] + transposeShift, 0, 127);
+                const int voiceCh     = (v == 0) ? bassChannel : upperChannel;
+                const bool isTopVoice = (v + 1 == numVoices);
+                emitVoiceNote(noteNumber, voiceCh, isTopVoice, v, chord.startPpq, chord.durationPpq, chord.baseVelocity, 1.0f);
+            }
+            continue;
+        }
 
-            // ストラム遅延（下からv番目の声部に応じて発音タイミングをずらす）＋ランダムジッター
-            const double strumOffsetMs = static_cast<double>(v) * static_cast<double>(profile.strumSpreadMs);
-            const double jitterOffsetMs = static_cast<double>(jitterDist(rng));
-            const double totalOffsetPpq = (strumOffsetMs + jitterOffsetMs) * kPpqPerMsAt120Bpm;
+        // 2. "Neo-Soul Pocket" / "Bossa Bounce": 左手（最低音 v==0）と右手（上声部 v>=1）の独立コンピング
+        std::vector<CompingHit> bassHits;
+        std::vector<CompingHit> upperHits;
 
-            const double noteOnPpq = std::max(0.0, chord.startPpq + totalOffsetPpq);
-            const double noteOffPpq = std::max(noteOnPpq + 0.05, chord.startPpq + chord.durationPpq);
+        if (profile.compingStyle == CompingStyle::NeoSoulPocket)
+        {
+            // 左手（最低音）は1拍目からどっしり長く伸ばしてポケットの土台を作る
+            bassHits.push_back(CompingHit { 0.0, chord.durationPpq, 1.04f });
 
-            // ベロシティ変調（トップノート強調＋ヒューマナイズ）
-            const float boost = isTopVoice ? profile.topVoiceVelocityBoost : 0.0f;
-            const int finalVelocity = std::clamp(
-                static_cast<int>(std::round(static_cast<float>(chord.baseVelocity) + boost + velDist(rng))),
-                1,
-                127
-            );
+            // 右手（2声部目以降）はレイドバック＆裏拍（+0.5 PPQ等）にずらしてネオソウル風に刻む
+            if (chord.durationPpq >= 3.2)
+            {
+                // 1小節（4拍）ブロック: 1拍裏 (+0.50) の長めコード -> 3拍目レイドバック (+2.05) のポケット -> 4拍裏 (+3.50) のゴーストピックアップ
+                upperHits.push_back(CompingHit { 0.50, 1.25, 0.96f });
+                upperHits.push_back(CompingHit { 2.05, 0.90, 0.84f });
+                if (chord.durationPpq >= 3.65)
+                {
+                    upperHits.push_back(CompingHit { 3.50, std::max(0.20, chord.durationPpq - 3.52), 0.90f });
+                }
+            }
+            else if (chord.durationPpq >= 1.6)
+            {
+                // 2拍ブロック: 1拍裏 (+0.50) -> 2拍裏 (+1.50) のシンコペーション刻み
+                upperHits.push_back(CompingHit { 0.50, 0.82, 0.95f });
+                if (chord.durationPpq >= 1.70)
+                {
+                    upperHits.push_back(CompingHit { 1.50, std::max(0.18, chord.durationPpq - 1.52), 0.86f });
+                }
+            }
+            else
+            {
+                // 短いパッシングコード等: ベースよりわずかに遅らせて（+0.07 PPQ レイドバック）発音
+                const double laidBackOffset = std::min(0.08, chord.durationPpq * 0.18);
+                upperHits.push_back(CompingHit { laidBackOffset, std::max(0.15, chord.durationPpq - laidBackOffset), 0.94f });
+            }
+        }
+        else // CompingStyle::BossaBounce
+        {
+            // 左手（最低音）は1拍目から長く保持（4拍ブロックでは1拍目〜2拍目＋3拍目〜4拍目の2分音符バウンス、またはロングトーン）
+            if (chord.durationPpq >= 3.2)
+            {
+                bassHits.push_back(CompingHit { 0.0,  1.90, 1.02f });
+                bassHits.push_back(CompingHit { 2.0,  std::max(0.50, chord.durationPpq - 2.0), 0.96f });
+            }
+            else
+            {
+                bassHits.push_back(CompingHit { 0.0, chord.durationPpq, 1.02f });
+            }
 
-            TimedMidiEvent onEv;
-            onEv.ppqPosition = noteOnPpq;
-            onEv.message = juce::MidiMessage::noteOn(1, noteNumber, static_cast<juce::uint8>(finalVelocity));
-            events.push_back(onEv);
+            // 右手（2声部目以降）はボサノヴァ特有のシンコペーション（1拍裏 +0.5 / 2拍裏 +1.5 / 3拍裏 +2.5 / 4拍裏 +3.5）で軽快に刻む
+            if (chord.durationPpq >= 3.2)
+            {
+                upperHits.push_back(CompingHit { 0.50, 0.82, 0.92f });
+                upperHits.push_back(CompingHit { 1.50, 0.82, 0.96f });
+                upperHits.push_back(CompingHit { 2.50, 0.65, 0.85f });
+                if (chord.durationPpq >= 3.65)
+                {
+                    upperHits.push_back(CompingHit { 3.50, std::max(0.18, chord.durationPpq - 3.52), 0.90f });
+                }
+            }
+            else if (chord.durationPpq >= 1.6)
+            {
+                upperHits.push_back(CompingHit { 0.50, 0.78, 0.94f });
+                if (chord.durationPpq >= 1.70)
+                {
+                    upperHits.push_back(CompingHit { 1.50, std::max(0.18, chord.durationPpq - 1.52), 0.88f });
+                }
+            }
+            else if (chord.durationPpq >= 0.75)
+            {
+                upperHits.push_back(CompingHit { 0.25, std::max(0.18, chord.durationPpq - 0.27), 0.92f });
+            }
+            else
+            {
+                upperHits.push_back(CompingHit { 0.04, std::max(0.15, chord.durationPpq - 0.04), 0.92f });
+            }
+        }
 
-            TimedMidiEvent offEv;
-            offEv.ppqPosition = noteOffPpq;
-            offEv.message = juce::MidiMessage::noteOff(1, noteNumber);
-            events.push_back(offEv);
+        // 左手ベース声部 (v == 0, Ch.1) の出力
+        {
+            const int bassNoteNumber = std::clamp(voicing.midiNotes[0] + transposeShift, 0, 127);
+            const bool isTopVoice    = (numVoices == 1);
+            for (const auto& hit : bassHits)
+            {
+                emitVoiceNote(
+                    bassNoteNumber,
+                    bassChannel,
+                    isTopVoice,
+                    0,
+                    chord.startPpq + hit.offsetPpq,
+                    hit.durationPpq,
+                    chord.baseVelocity,
+                    hit.velocityScale
+                );
+            }
+        }
+
+        // 右手上声部 (v >= 1, Ch.1 or Ch.2) の出力
+        for (const auto& hit : upperHits)
+        {
+            for (size_t v = 1; v < numVoices; ++v)
+            {
+                const int noteNumber  = std::clamp(voicing.midiNotes[v] + transposeShift, 0, 127);
+                const bool isTopVoice = (v + 1 == numVoices);
+                emitVoiceNote(
+                    noteNumber,
+                    upperChannel,
+                    isTopVoice,
+                    v - 1, // 上声部内でのストラム順序
+                    chord.startPpq + hit.offsetPpq,
+                    hit.durationPpq,
+                    chord.baseVelocity,
+                    hit.velocityScale
+                );
+            }
         }
     }
 
-    // PPQ順（時系列順）にソート
+    // PPQ順（時系列順）にソート（同一時刻の場合は NoteOff を NoteOn より先に処理）
     std::sort(events.begin(), events.end(), [](const TimedMidiEvent& a, const TimedMidiEvent& b)
     {
-        return a.ppqPosition < b.ppqPosition;
+        if (std::abs(a.ppqPosition - b.ppqPosition) > 1.0e-6)
+            return a.ppqPosition < b.ppqPosition;
+        return a.message.isNoteOff() && !a.message.isNoteOn() && b.message.isNoteOn();
     });
 
     // Phase 9: Audio Groove Sync が有効な場合、環境レイヤーのヒューマナイズよりも後に

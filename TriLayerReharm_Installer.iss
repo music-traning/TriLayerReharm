@@ -3,13 +3,13 @@
 ; Publisher : Universal Make Associates (U.M.A)
 ; =============================================================================
 
-#define MyAppName      "TriLayerReharm"
-#define MyAppVersion   "1.0.0"
+#define MyAppName      "TriLayerReharm 1.5"
+#define MyAppVersion   "1.5.0"
 #define MyAppPublisher "Universal Make Associates"
 #define MyAppCopyright "© 2026 Universal Make Associates"
 
 ; CMake の Release ビルド出力先（.iss ファイルをプロジェクトルートに置いた場合の相対パス）
-#define Vst3BundleSourceDir "build\TriLayerReharm_artefacts\Release\VST3\TriLayerReharm.vst3"
+#define Vst3BundleSourceDir "build\TriLayerReharm_artefacts\Release\VST3\TriLayerReharm1.5.vst3"
 
 [Setup]
 ; アプリケーション識別用の一意なGUID（アップデート時の上書き判定に使用）
@@ -37,7 +37,7 @@ DisableProgramGroupPage=yes
 
 ; 出力インストーラーの設定と高圧縮指定
 OutputDir=InstallerOutput
-OutputBaseFilename=TriLayerReharm_Installer_v1.0.0
+OutputBaseFilename=TriLayerReharm_Installer_v1.5.0
 Compression=lzma2/ultra64
 SolidCompression=yes
 
@@ -51,10 +51,10 @@ Name: "japanese"; MessagesFile: "compiler:Languages\Japanese.isl"
 Name: "english";  MessagesFile: "compiler:Default.isl"
 
 [Files]
-; VST3バンドル（TriLayerReharm.vst3 フォルダ構造一式）をそのまま維持してコピー
-Source: "{#Vst3BundleSourceDir}\*"; DestDir: "{app}\TriLayerReharm.vst3"; Flags: ignoreversion recursesubdirs createallsubdirs
+; VST3バンドル（TriLayerReharm1.5.vst3 フォルダ構造一式）をそのまま維持してコピー
+Source: "{#Vst3BundleSourceDir}\*"; DestDir: "{app}\TriLayerReharm1.5.vst3"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [UninstallDelete]
 ; アンインストール時にバンドルフォルダおよび空になったベンダーフォルダをクリーンアップ
-Type: filesandordirs; Name: "{app}\TriLayerReharm.vst3"
+Type: filesandordirs; Name: "{app}\TriLayerReharm1.5.vst3"
 Type: dirifempty;     Name: "{app}"

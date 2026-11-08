@@ -237,7 +237,20 @@ namespace
         juce::String result = baseQuality;
         if (!tensions.isEmpty())
         {
-            result += "(" + tensions.joinIntoString(",") + ")";
+            const int alteredCount = (hasMin2 ? 1 : 0)
+                                     + ((hasMaj3 && hasMin3 && isDominant) ? 1 : 0)
+                                     + (hasDim5 ? 1 : 0)
+                                     + (hasAug5 ? 1 : 0);
+
+            // ドミナント7thで複数のオルタードテンション（b9, #9, #11, b13）を含みナチュラルテンションを含まない場合は "7alt" と簡潔に表記
+            if (isDominant && !isSus4 && baseQuality == "7" && alteredCount >= 2 && !hasMaj2 && !hasP4 && !hasMaj6)
+            {
+                result = "7alt";
+            }
+            else
+            {
+                result += "(" + tensions.joinIntoString(",") + ")";
+            }
         }
 
         juce::ignoreUnused(matchedNotes);

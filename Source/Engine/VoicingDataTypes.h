@@ -22,6 +22,30 @@ enum class VoicingStyle : uint8_t
 };
 
 /**
+ * @brief v1.5 コンピング・リズム分割スタイル（白玉コードをリズミカルな演奏へ変換）
+ */
+enum class CompingStyle : int
+{
+    Sustained = 0,      ///< 白玉（全声部が同時に発音し、長く伸びる）
+    NeoSoulPocket = 1,  ///< Neo-Soul Pocket（左手ベース維持＋右手上声部の裏拍・レイドバック刻み）
+    BossaBounce = 2     ///< Bossa Bounce（ボサノヴァ風の左手バウンス＋右手シンコペーション刻み）
+};
+
+/**
+ * @brief v1.5 機能I: ダイアトニックスケール拘束（Key Awareness）用のスケール／モード種別
+ */
+enum class ScaleType : int
+{
+    MajorIonian = 0,         ///< Major (Ionian): {0, 2, 4, 5, 7, 9, 11}
+    NaturalMinorAeolian = 1, ///< Natural Minor (Aeolian): {0, 2, 3, 5, 7, 8, 10}
+    HarmonicMinor = 2,       ///< Harmonic Minor: {0, 2, 3, 5, 7, 8, 11}
+    MelodicMinor = 3,        ///< Melodic Minor: {0, 2, 3, 5, 7, 9, 11}
+    Dorian = 4,              ///< Dorian: {0, 2, 3, 5, 7, 9, 10}
+    Mixolydian = 5,          ///< Mixolydian: {0, 2, 4, 5, 7, 9, 10}
+    Lydian = 6               ///< Lydian: {0, 2, 4, 6, 7, 9, 11}
+};
+
+/**
  * @brief コードクオリティ種別
  */
 enum class ChordQuality : uint8_t
@@ -60,7 +84,7 @@ struct GenreRules
 };
 
 /**
- * @brief Layer 2: アーティスト固有の演奏癖・ボイシング美学ルール
+ * @brief Layer 2: アーティスト固有の演奏癖・ボイシング美学ルール（v1.5 達人シミュレーター対応）
  */
 struct ArtistRules
 {
@@ -68,11 +92,19 @@ struct ArtistRules
     float spreadDeviationWeight { 1.5f };           ///< 理想の広がりからの乖離に対する重み
     float voiceLeadingWeight { 2.0f };              ///< 前のコードからの各声部の移動距離に対する重み
     float topNoteLeapWeight { 3.0f };               ///< トップノート（最高音）の跳躍に対する重み（メロディックな繋がり重視）
+    float bassNoteLeapWeight { 1.0f };              ///< v1.5 機能D (Joe P.): ベースノート（最低音）の跳躍に対する重み
+
+    bool forceRootless { false };                   ///< v1.5 機能D (Bill E.): omitRootPenaltyを無効化しルートレス配置を選好
+    float minorSecondPenaltyScale { 1.0f };         ///< v1.5 機能D (Bill E.): ジャンルの短2度ペナルティに対する乗算スケール
+    float quartalIntervalBonus { 0.0f };            ///< v1.5 機能D (McCoy T.): 隣接声部が完全4度（5半音）の場合のコスト減算ボーナス
+    std::optional<VoicingStyle> preferredStyleOverride; ///< v1.5 機能D: アーティスト固有のボイシングスタイル強制上書き（Close / Drop2等）
+    float styleMismatchPenaltyScale { 1.0f };       ///< v1.5 機能D (Joe P.): Drop2等のスタイル不一致ペナルティ強化倍率
 
     float timingJitterMs { 4.0f };                  ///< 発音タイミングのランダムな揺らぎ（ミリ秒）
     float strumSpreadMs { 8.0f };                   ///< 下の声部から上の声部へアルペジオ状に発音するストラム遅延（ミリ秒）
     float velocityHumanizeRange { 8.0f };           ///< ベロシティのランダム変調幅
     float topVoiceVelocityBoost { 10.0f };          ///< トップノートを際立たせるベロシティ加算量
+    float baseVelocityOffset { 0.0f };              ///< v1.5 機能D (McCoy T.): 基準ベロシティへの全体オフセット加算量
 };
 
 /**
@@ -115,8 +147,10 @@ struct VoicingProfile
 
     // 静的コスト重み
     float omitRootPenalty { 12.0f };
+    bool forceRootless { false };
     float guideToneMissingPenalty { 35.0f };
     float minorSecondPenalty { 50.0f };
+    float quartalIntervalBonus { 0.0f };
     float styleMismatchPenalty { 10.0f };
     float spreadTargetSemitones { 16.0f };
     float spreadDeviationWeight { 1.5f };
@@ -129,15 +163,26 @@ struct VoicingProfile
     // 動的（遷移）コスト重み
     float voiceLeadingWeight { 2.0f };
     float topNoteLeapWeight { 3.0f };
+    float bassNoteLeapWeight { 1.0f };
 
     // 発音タイミング・ベロシティ変調パラメーター
     float timingJitterMs { 4.0f };
     float strumSpreadMs { 8.0f };
     float velocityHumanizeRange { 8.0f };
     float topVoiceVelocityBoost { 10.0f };
+    float baseVelocityOffset { 0.0f };
 
-    // Phase 8: Mutation（突然変異・カオス度）パラメーター (0.0f 〜 100.0f, Default: 50.0f)
-    float mutationAmount { 50.0f };
+    // Phase 8: Mutation（突然変異・カオス度）パラメーター (0.0f 〜 100.0f, Default: 0.0f)
+    float mutationAmount { 0.0f };
+
+    // v1.5 和声の進化（既存トラックと衝突しない3つの和声制御）＋コンピングスタイル
+    bool melodyLock { false };          ///< 元のMIDIの最高音（targetTopNote）をトップノートとして絶対維持
+    bool forceDiatonic { false };       ///< 指定キーのダイアトニックスケール外のテンション（アボイドノート）を除外
+    int songKeyPitchClass { 0 };        ///< 楽曲キーの主音ピッチクラス (0 = C, 1 = C#, ..., 11 = B)
+    ScaleType scaleType { ScaleType::MajorIonian }; ///< v1.5 機能I: ダイアトニックスケール拘束で使用するスケール／モード種別
+    bool pedalBassMode { false };       ///< 進行の先頭ベース音（または主音）を全コードの最低音として固定（ペダルポイント）
+    CompingStyle compingStyle { CompingStyle::Sustained }; ///< リズム分割・コンピングスタイル
+    bool splitMidiChannels { false };   ///< v1.5 機能H: ON時は最低音(Bass)をCh.1、上声部(Chord/Tension)をCh.2に分離出力
 };
 
 /**
@@ -166,11 +211,13 @@ struct VoicingProfile
     // 2. Genre (音楽理論・静的ペナルティ)
     profile.allowTritoneSub = genre.allowTritoneSub;
     profile.allowTensions = genre.allowTensions;
-    profile.preferredStyle = genre.preferredStyle;
-    profile.omitRootPenalty = std::max(0.0f, genre.omitRootPenalty);
+    profile.preferredStyle = artist.preferredStyleOverride.value_or(genre.preferredStyle);
+    profile.forceRootless = artist.forceRootless;
+    profile.omitRootPenalty = artist.forceRootless ? 0.0f : std::max(0.0f, genre.omitRootPenalty);
     profile.guideToneMissingPenalty = std::max(0.0f, genre.guideToneMissingPenalty);
-    profile.minorSecondPenalty = std::max(0.0f, genre.minorSecondPenalty);
-    profile.styleMismatchPenalty = std::max(0.0f, genre.styleMismatchPenalty);
+    profile.minorSecondPenalty = std::max(0.0f, genre.minorSecondPenalty * artist.minorSecondPenaltyScale);
+    profile.quartalIntervalBonus = std::max(0.0f, artist.quartalIntervalBonus);
+    profile.styleMismatchPenalty = std::max(0.0f, genre.styleMismatchPenalty * artist.styleMismatchPenaltyScale);
 
     // 3. Artist (美学・ボイスリーディング・ヒューマナイズ)
     profile.spreadTargetSemitones = std::clamp(
@@ -181,11 +228,13 @@ struct VoicingProfile
     profile.spreadDeviationWeight = std::max(0.0f, artist.spreadDeviationWeight);
     profile.voiceLeadingWeight = std::max(0.0f, artist.voiceLeadingWeight);
     profile.topNoteLeapWeight = std::max(0.0f, artist.topNoteLeapWeight);
+    profile.bassNoteLeapWeight = std::max(0.0f, artist.bassNoteLeapWeight);
 
     profile.timingJitterMs = std::max(0.0f, artist.timingJitterMs);
     profile.strumSpreadMs = artist.strumSpreadMs;
     profile.velocityHumanizeRange = std::clamp(artist.velocityHumanizeRange, 0.0f, 40.0f);
     profile.topVoiceVelocityBoost = std::clamp(artist.topVoiceVelocityBoost, -30.0f, 30.0f);
+    profile.baseVelocityOffset = std::clamp(artist.baseVelocityOffset, -30.0f, 30.0f);
 
     return profile;
 }
@@ -276,7 +325,25 @@ struct ChordBlock
     double durationPpq { 4.0 };                     ///< 長さ（PPQ）
     int baseVelocity { 90 };                        ///< 基準ベロシティ (1 - 127)
     std::optional<int> targetTopNote;               ///< 元のトップノート（メロディ維持の参照用、任意）
+    std::optional<int> originalBassNote;            ///< v1.5: 元のMIDIブロックの最低音（ペダルベース参照用、任意）
+    std::optional<int> forcedBassNote;              ///< v1.5: ペダルポイント・モード時に強制固定される最低音（MIDIノート番号）
+    std::vector<int> originalPitches;               ///< v1.5 機能F: 元MIDIのそのままの構成音ピッチ配列（Mutation 0% / A/B Original時の完全再現用）
     bool isPassingChord { false };                  ///< Phase 13: 分割挿入されたパッシングコード（裏コード等）かどうか
+    bool isLocked { false };                        ///< v1.5: このコードブロックがピン留め（ロック）されているか
+    Voicing lockedVoicing {};                       ///< v1.5: ロック時にViterbi探索でパススルー維持する前回のボイシング結果
+};
+
+/**
+ * @brief Piano Roll UI 描画およびロック操作用のコードブロック表示情報 (v1.5)
+ */
+struct ChordBlockViewInfo
+{
+    size_t blockIndex { 0 };
+    double startPpq { 0.0 };
+    double durationPpq { 4.0 };
+    bool isLocked { false };
+    bool isPassingChord { false };
+    std::vector<int> midiNotes; ///< トランスポーズ適用後のMIDIノート番号配列
 };
 
 } // namespace reharm::engine

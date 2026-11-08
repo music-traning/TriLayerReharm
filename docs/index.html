@@ -236,7 +236,7 @@
       </nav>
       <a href="https://github.com/music-traning/TriLayerReharm/releases" target="_blank" rel="noopener noreferrer"
          class="px-4 py-1.5 rounded-full text-xs font-mono font-semibold border border-daw-cyan/50 text-daw-cyan hover:bg-daw-cyan/10 transition">
-        v1.0.0 (Phase 14)
+        v1.5.0 (Monster Edition)
       </a>
     </div>
   </header>
@@ -255,7 +255,7 @@
         <div class="lg:col-span-7 text-left space-y-6">
           <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-daw-card border border-white/10 text-xs font-mono text-slate-300">
             <span class="w-2 h-2 rounded-full bg-daw-emerald animate-ping"></span>
-            <span class="text-daw-amber font-semibold">Universal Make Associates</span> Signature Series — Phase 14 Complete
+            <span class="text-daw-amber font-semibold">Universal Make Associates</span> Signature Series — v1.5.0 Monster Edition
           </div>
 
           <h1 class="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight leading-[1.15]">
@@ -965,19 +965,18 @@
             <div class="p-6 space-y-5 text-xs sm:text-sm">
               <div>
                 <div class="font-mono font-bold text-white flex items-center justify-between">
-                  <span>Undo / Redo ボタン</span>
+                  <span>Save / Load / Unlock / Undo / Redo ボタン</span>
                   <span class="text-xs text-daw-cyan">Shortcut: Ctrl+Z / Ctrl+Y (Cmd+Shift+Z)</span>
                 </div>
                 <p class="text-slate-400 mt-1">
-                  すべてのパラメーター操作、Mutationスライダー、プリセット切り替えの履歴を前後に辿ることができます。
+                  <strong class="text-daw-emerald">Save / Load</strong> で現在のパラメーター・MIDI進行・ピン留め（Lock）状態をXMLプリセット（<code class="text-slate-300 font-mono">TriLayerReharm/Presets</code>）として保存・ワンクリック呼び出し可能。<strong class="text-daw-gold">Unlock</strong> で全ピン留め解除、Undo/Redoで全履歴を辿れます。
                 </p>
               </div>
 
               <div class="border-t border-white/5 pt-4">
-                <div class="font-mono font-bold text-daw-amber">LAYER 1 : GENRE (8 GENRES)</div>
+                <div class="font-mono font-bold text-daw-amber">LAYER 1 : GENRE (8 GENRES) &amp; COMPING STYLE (RHYTHM)</div>
                 <p class="text-slate-400 mt-1">
-                  和声理論の骨格（優先ボイシングスタイル、ルート省略許容度、短2度クラスター許容度、裏コード解禁有無）を決定します。<br />
-                  <span class="text-slate-300 font-mono text-xs">選択肢: Jazz / Neo-Soul / City Pop / Cinematic / Lo-Fi / Modern R&amp;B / Gospel / 8-Bit</span>
+                  和声理論の骨格（8ジャンル）と、リズム分割スタイル（<code class="text-daw-cyan font-mono">Sustained(白玉) / Neo-Soul Pocket / Bossa Bounce</code>）を決定します。コンピング選択時は左手ベースを維持したまま右手上声部が裏拍・シンコペーションで躍動します。
                 </p>
               </div>
 
@@ -989,15 +988,15 @@
               </div>
 
               <div class="border-t border-white/5 pt-4">
-                <div class="font-mono font-bold text-daw-purple">LAYER 2 : ARTIST (ORBIT)</div>
+                <div class="font-mono font-bold text-daw-purple">LAYER 2 : ARTIST (巨匠ボイシング・シミュレーター)</div>
                 <p class="text-slate-400 mt-1">
-                  演奏者の「手癖」とボイスリーディング重みを設定します：
+                  歴史的巨匠のボイシング美学とボイスリーディング重みをViterbiコスト関数へ反映します：
                 </p>
                 <ul class="mt-1.5 space-y-1 text-slate-300 font-mono text-xs">
-                  <li>・<strong>Artist A:</strong> Smooth &amp; Tight（声部移動を最小化する端正な連結）</li>
-                  <li>・<strong>Artist B:</strong> Wide Expressive Strum（18msの豊かなアルペジオ・ストラム）</li>
-                  <li>・<strong>Artist C:</strong> Rhythmic Drunk Groove（J Dilla風の14msタイミング揺らぎ）</li>
-                  <li>・<strong>Artist D:</strong> Minimal &amp; Precise（揺らぎを抑えた精密なトップノート追従）</li>
+                  <li>・<strong>1. Rootless Master (ex. Bill E.):</strong> ルートレス密集和音と短2度クラスター、繊細なレイドバック</li>
+                  <li>・<strong>2. Quartal Power (ex. McCoy T.):</strong> 完全4度堆積（Quartal Voicing）ボーナスと力強い打鍵</li>
+                  <li>・<strong>3. Melody &amp; Bass (ex. Joe P.):</strong> Drop 2 選好＋トップ音とベースラインの滑らかな対位法的進行</li>
+                  <li>・<strong>4. Standard (Default):</strong> ジャンル標準のバランス設計</li>
                 </ul>
               </div>
 
@@ -1043,23 +1042,13 @@
               </div>
 
               <div class="border-t border-white/5 pt-4">
-                <div class="font-mono font-bold text-white">OPERATING MODE (動作モード)</div>
-                <ul class="mt-1.5 space-y-1 text-slate-300 font-mono text-xs">
-                  <li>・<strong>Bypass (Thru):</strong> 入力されたMIDIとAudioをそのまま後段のシンセへ完全スルーします（D&amp;Dワークフロー時の標準モード）。</li>
-                  <li>・<strong>Capture MIDI:</strong> DAW再生中に入力されたリアルタイムMIDI演奏を内部バッファへ記録します（スルー出力も維持）。</li>
-                  <li>・<strong>Playback Reharm:</strong> リハーモナイズ済みのMIDIシーケンスをDAWの再生位置（PPQ）に同期して後段のシンセへ直接送出します。</li>
-                </ul>
-              </div>
-
-              <div class="border-t border-white/5 pt-4">
-                <div class="font-mono font-bold text-daw-emerald">Groove Sync トグル ＆ Audition (Preview) トグル</div>
-                <ul class="mt-1.5 space-y-1.5 text-slate-400">
-                  <li>
-                    <strong class="text-daw-emerald font-mono">Groove Sync:</strong> サイドチェイン（またはメインAudio入力）のトランジェント（ドラムのアタック）を解析し、環境レイヤーのヒューマナイズよりも優先してノート発音位置をドラムのポケットへ吸着させます。
-                  </li>
-                  <li>
-                    <strong class="text-daw-gold font-mono">Audition (Preview):</strong> 内蔵の12ボイス・ポリフォニック・エレピ音源をONにします。DAW停止中でもプラグイン単体で4小節/8小節のループ試聴が可能です。
-                  </li>
+                <div class="font-mono font-bold text-white">MODE / TRANSPOSE / KEY / SCALE &amp; 和声制御トグル群 (v1.5 新機能)</div>
+                <ul class="mt-1.5 space-y-1.5 text-slate-300 font-mono text-xs">
+                  <li>・<strong class="text-daw-cyan">A/B: Reharm / Original &amp; Layer Safe / Reset:</strong> 設定を維持したまま原曲と瞬時に聴き比べる <code class="text-daw-cyan">A/B</code>、既存トラックと衝突しない黄金比（City Pop + 32%）へ一発設定する <code class="text-daw-emerald">Layer Safe</code>、Undo保護付きで初期状態へ戻す <code class="text-daw-crimson">Reset</code> を搭載。</li>
+                  <li>・<strong class="text-daw-purple">TRANSPOSE (-12〜+12 st) / KEY (12 Keys) / SCALE (7 Modes):</strong> 出力直前の移調に加え、<code class="text-daw-cyan">Major, Natural Minor, Harmonic Minor, Melodic Minor, Dorian, Mixolydian, Lydian</code> の7スケールに対応。</li>
+                  <li>・<strong class="text-pink-400">Melody Lock / Force Diatonic / Pedal Bass:</strong> トップノート絶対維持、指定キー＆スケールのアボイドノート完全除外、ペダルベース固定を個別にON/OFF可能。</li>
+                  <li>・<strong class="text-daw-emerald">Groove Sync / Split Bass/Chord Ch. / Audition:</strong> サイドチェイン吸着、最低音（Ch.1）と上声部（Ch.2）のMIDIチャンネル分離出力、内蔵12ボイスエレピ試聴を搭載。</li>
+                  <li>・<strong class="text-daw-amber">ピアノロール操作:</strong> コードブロック左クリックでピン留め固定（🔒）、マウスホイールまたは右クリックで展開形（転回形）・オクターブを手動シフト可能。</li>
                 </ul>
               </div>
             </div>

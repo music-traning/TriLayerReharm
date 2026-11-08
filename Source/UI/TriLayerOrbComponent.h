@@ -58,7 +58,7 @@ private:
     juce::String currentGenre_ { "Jazz" };
     int currentArtistIndex_ { 0 };
     juce::String currentEnvironment_ { "Rainy" };
-    float mutationAmount_ { 50.0f }; ///< 0.0f (Basic) 〜 100.0f (Chaos)
+    float mutationAmount_ { 0.0f }; ///< 0.0f (Basic) 〜 100.0f (Chaos)
 
     float rotationAngleRad_ { 0.0f };
     float pulsePhaseRad_ { 0.0f };

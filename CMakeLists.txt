@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(TriLayerReharm VERSION 0.1.0 LANGUAGES C CXX)
+project(TriLayerReharm VERSION 1.5.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -33,7 +33,7 @@ endif()
 juce_add_plugin(TriLayerReharm
     COMPANY_NAME "Universal Make Associates"
     COMPANY_COPYRIGHT "Copyright (c) 2026 Universal Make Associates"
-    BUNDLE_ID "com.UniversalMakeAssociates.TriLayerReharm"
+    BUNDLE_ID "com.UniversalMakeAssociates.TriLayerReharm15"
     IS_SYNTH FALSE
     NEEDS_MIDI_INPUT TRUE
     NEEDS_MIDI_OUTPUT TRUE
@@ -42,9 +42,9 @@ juce_add_plugin(TriLayerReharm
     COPY_PLUGIN_AFTER_BUILD TRUE
     VST3_COPY_DIR "${DEFAULT_VST3_INSTALL_DIR}"
     PLUGIN_MANUFACTURER_CODE UMAs
-    PLUGIN_CODE TLRh
+    PLUGIN_CODE TLR5
     FORMATS VST3 AU Standalone
-    PRODUCT_NAME "TriLayerReharm"
+    PRODUCT_NAME "TriLayerReharm1.5"
 )
 
 target_sources(TriLayerReharm

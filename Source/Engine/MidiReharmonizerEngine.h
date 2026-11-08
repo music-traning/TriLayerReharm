@@ -114,6 +114,140 @@ public:
     [[nodiscard]] float getMutationAmount() const noexcept;
 
     //==============================================================================
+    // v1.5 機能A: トランスポーズ（移調）機能 (-12 〜 +12 半音)
+    //==============================================================================
+
+    /**
+     * @brief 出力直前のMIDIノート番号に対する移調量（-12 〜 +12 半音）を設定します。
+     */
+    void setTransposeSemitones(int semitones) noexcept;
+
+    /**
+     * @brief 現在の移調量（-12 〜 +12 半音）を取得します。
+     */
+    [[nodiscard]] int getTransposeSemitones() const noexcept;
+
+    //==============================================================================
+    // v1.5 機能B: 進行スロットの部分ロック（ピン留め）機能
+    //==============================================================================
+
+    /**
+     * @brief 指定されたコードブロックインデックスのロック（ピン留め）状態をトグルします。
+     * @return トグル後のロック状態（ロックされた場合は true）
+     */
+    bool toggleChordBlockLockByIndex(size_t blockIndex);
+
+    /**
+     * @brief 指定されたPPQ位置を含むコードブロックのロック（ピン留め）状態をトグルします。
+     * @return トグル後のロック状態
+     */
+    bool toggleChordBlockLockAtPpq(double ppqPosition);
+
+    /**
+     * @brief すべてのコードブロックのロック状態を解除します。
+     */
+    void clearLockedChordBlocks();
+
+    /**
+     * @brief 現在1つ以上のコードブロックがロックされているかどうかを返します。
+     */
+    [[nodiscard]] bool hasLockedChordBlocks() const noexcept;
+
+    /**
+     * @brief Undo/Redo 保護用に現在のロック済みコードブロック配列のスナップショットを取得・復元します。
+     */
+    [[nodiscard]] std::vector<ChordBlock> getLockedChordBlocksSnapshot() const;
+    void setLockedChordBlocksSnapshot(std::vector<ChordBlock> lockedBlocks);
+
+    /**
+     * @brief v1.5 機能F: A/Bコンペア（Original原曲バイパス / Reharm通常出力）の切り替え状態を設定・取得します。
+     *        true（Original）の場合、Mutation等の設定値を保持したまま一時的にMutation=0.0%相当の原曲パススルー出力を行います。
+     */
+    void setCompareOriginalMode(bool compareOriginal) noexcept;
+    [[nodiscard]] bool isCompareOriginalMode() const noexcept;
+
+    /**
+     * @brief Piano Roll UI 描画用の各コードブロック情報（ロック状態および移調後ノート配列を含む）を取得します。
+     */
+    [[nodiscard]] std::vector<ChordBlockViewInfo> getChordBlockViews() const;
+
+    /**
+     * @brief 指定されたコードブロックのボイシングの展開形（転回形）またはオクターブをシフトしてロック登録し、
+     *        前後のボイスリーディングを含めて再計算・即時反映します。
+     * @param blockIndex      対象のコードブロックインデックス
+     * @param inversionSteps  転回ステップ数（+1: 最低音をオクターブ上げて上方向転回, -1: 最高音をオクターブ下げて下方向転回）
+     * @param octaveShift     オクターブシフト数（+1: +12半音, -1: -12半音）
+     * @return シフトおよび再計算に成功した場合は true
+     */
+    bool shiftChordBlockVoicing(size_t blockIndex, int inversionSteps, int octaveShift = 0);
+
+    //==============================================================================
+    // v1.5 DAWプロジェクト状態保存・復元 (State Serialization)
+    //==============================================================================
+
+    /**
+     * @brief 現在エンジン内にキャプチャ／インポート済みの元MIDIシーケンスが存在するかどうかを返します。
+     */
+    [[nodiscard]] bool hasCapturedSequence() const noexcept;
+
+    /**
+     * @brief エンジン内部の `capturedSequence_`（元MIDIデータ）および `lockedBlocks_`（ピン留め状態）を
+     *        XMLエレメント（`<EngineState>`）としてシリアライズして返します。
+     */
+    [[nodiscard]] std::unique_ptr<juce::XmlElement> createEngineStateXml() const;
+
+    /**
+     * @brief 保存された `<EngineState>` XMLエレメントから `capturedSequence_` と `lockedBlocks_` を復元します。
+     */
+    void restoreEngineStateFromXml(const juce::XmlElement& engineXml);
+
+    //==============================================================================
+    // v1.5 和声の進化（既存トラックとケンカしない3つの和声制御）
+    //==============================================================================
+
+    /**
+     * @brief 1. メロディ絶対維持モード (Melody Lock) の有効／無効を設定します。
+     *        ONの場合、元のMIDIの最高音（targetTopNote）と一致しない候補を除外します。
+     */
+    void setMelodyLockEnabled(bool enabled) noexcept;
+    [[nodiscard]] bool isMelodyLockEnabled() const noexcept;
+
+    /**
+     * @brief 2. ダイアトニックスケール拘束 (Key Awareness) の有効／無効と楽曲キー（0=C 〜 11=B）を設定します。
+     *        ONの場合、指定されたキーのダイアトニックスケール外のテンション（アボイドノート）を候補から除外します。
+     */
+    void setForceDiatonicEnabled(bool enabled) noexcept;
+    [[nodiscard]] bool isForceDiatonicEnabled() const noexcept;
+
+    void setSongKeyPitchClass(int keyPitchClass) noexcept;
+    [[nodiscard]] int getSongKeyPitchClass() const noexcept;
+
+    /**
+     * @brief v1.5 機能I: ダイアトニックスケール拘束用のスケール／モード種別を設定・取得します。
+     */
+    void setScaleType(ScaleType type) noexcept;
+    [[nodiscard]] ScaleType getScaleType() const noexcept;
+
+    /**
+     * @brief 3. ペダルポイント・モード (Pedal Bass) の有効／無効を設定します。
+     *        ONの場合、進行の最初のコードのベース音（または主音）を全コードの最低音として強制固定します。
+     */
+    void setPedalBassModeEnabled(bool enabled) noexcept;
+    [[nodiscard]] bool isPedalBassModeEnabled() const noexcept;
+
+    /**
+     * @brief 4. コンピング・リズム分割スタイル (Sustained / Neo-Soul Pocket / Bossa Bounce) を設定します。
+     */
+    void setCompingStyle(CompingStyle style) noexcept;
+    [[nodiscard]] CompingStyle getCompingStyle() const noexcept;
+
+    /**
+     * @brief 5. v1.5 機能H: ベース音（Ch.1）と上声部（Ch.2）のMIDIチャンネル分離出力の有効／無効を設定します。
+     */
+    void setSplitMidiChannelsEnabled(bool enabled) noexcept;
+    [[nodiscard]] bool isSplitMidiChannelsEnabled() const noexcept;
+
+    //==============================================================================
     // Phase 9: Audio Groove Sync (サイドチェイン・トランジェント抽出＆動的クオンタイズ)
     //==============================================================================
 
@@ -154,6 +288,12 @@ public:
      *        （入力が空の場合はプレビュー用のデフォルトコード進行から生成可能）
      */
     [[nodiscard]] juce::MidiMessageSequence getReharmonizedMidiSequence(double ticksPerQuarterNote = 960.0) const;
+
+    /**
+     * @brief 変換前の元MIDIデータ（`capturedSequence_`）を PianoRoll のゴーストノート描画用に
+     *        `juce::MidiMessageSequence` 形式で取得します。
+     */
+    [[nodiscard]] juce::MidiMessageSequence getCapturedMidiSequence(double ticksPerQuarterNote = 960.0) const;
 
     /**
      * @brief 指定された構成音（MIDIノート番号配列）からコードネーム文字列を逆解析して返します。
@@ -282,6 +422,13 @@ private:
     void quantizeEventsToGrooveMap(std::vector<TimedMidiEvent>& events,
                                    std::span<const double> grooveMapPpq) const;
 
+    /**
+     * @brief ロック（ピン留め）されたコードブロック群を進行配列へマージし、ロック区間のボイシングを保持させます。
+     */
+    [[nodiscard]] static std::vector<ChordBlock> applyLockedBlocksToProgression(
+        std::span<const ChordBlock> candidateProgression,
+        std::span<const ChordBlock> lockedBlocks);
+
     //==============================================================================
     double currentSampleRate_ { 44100.0 };
     int currentMaxBlockSize_ { 512 };
@@ -290,8 +437,18 @@ private:
 
     // 3層レイヤーから合成された現在のプロファイル
     VoicingProfile activeProfile_;
-    std::atomic<float> mutationAmount_ { 50.0f };
+    std::atomic<float> mutationAmount_ { 0.0f };
+    std::atomic<int> transposeSemitones_ { 0 };
+    int renderedTransposeSemitones_ { 0 };
     std::atomic<bool> grooveSyncEnabled_ { false };
+    std::atomic<bool> melodyLock_ { false };
+    std::atomic<bool> forceDiatonic_ { false };
+    std::atomic<int> songKeyPitchClass_ { 0 };
+    std::atomic<int> scaleType_ { 0 };
+    std::atomic<bool> pedalBassMode_ { false };
+    std::atomic<int> compingStyle_ { 0 };
+    std::atomic<bool> splitMidiChannels_ { false };
+    std::atomic<bool> compareOriginalMode_ { false };
 
     // Phase 9: 直近数小節分のトランジェント発音位置（PPQ）を保持する GrooveMap リングバッファ
     static constexpr size_t kMaxGrooveMapSize = 128;
@@ -304,6 +461,11 @@ private:
 
     // オフライン変換後の出力用シーケンス（PlaybackReharmモード時に参照）
     std::vector<TimedMidiEvent> reharmonizedSequence_;
+
+    // v1.5 機能B: 直近の進行・最適ボイシング（未移調）およびロック済みコードブロック一覧
+    std::vector<ChordBlock> lastProgression_;
+    std::vector<Voicing> lastOptimalVoicings_;
+    std::vector<ChordBlock> lockedBlocks_;
 
     // オフライン変換とオーディオスレッドの競合を防ぐ軽量ロック
     mutable juce::SpinLock sequenceLock_;

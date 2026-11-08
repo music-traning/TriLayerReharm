@@ -20,8 +20,17 @@ namespace ParamIDs
     inline constexpr const char* artist            = "artist";
     inline constexpr const char* environment       = "environment";
     inline constexpr const char* mutationAmount    = "mutationAmount";
+    inline constexpr const char* transpose         = "transpose";
     inline constexpr const char* enableGrooveSync  = "enableGrooveSync";
     inline constexpr const char* enableAudition    = "enableAudition";
+    inline constexpr const char* melodyLock        = "melodyLock";
+    inline constexpr const char* forceDiatonic     = "forceDiatonic";
+    inline constexpr const char* songKey           = "songKey";
+    inline constexpr const char* scaleType         = "scaleType";
+    inline constexpr const char* pedalBassMode     = "pedalBassMode";
+    inline constexpr const char* compingStyle      = "compingStyle";
+    inline constexpr const char* abCompare         = "abCompare";
+    inline constexpr const char* splitMidiChannels = "splitMidiChannels";
 }
 
 /**
@@ -71,6 +80,34 @@ public:
     void setStateInformation(const void* data, int sizeInBytes) override;
 
     //==============================================================================
+    // v1.5 機能J: お気に入り状態のユーザープリセット保存・読み込み機能
+    //==============================================================================
+    /**
+     * @brief ユーザープリセット保存先フォルダ (`<userApplicationDataDirectory>/TriLayerReharm/Presets`) を取得します（未作成時は自動作成）。
+     */
+    [[nodiscard]] static juce::File getUserPresetsDirectory();
+
+    /**
+     * @brief 現在のAPVTSパラメータ、カスタムMIDI情報、およびエンジン状態（capturedSequence_ と lockedBlocks_）を統合したXMLを生成します。
+     */
+    [[nodiscard]] std::unique_ptr<juce::XmlElement> createFullPresetXml();
+
+    /**
+     * @brief 統合プリセットXMLからAPVTSおよびエンジン状態を完全復元し、オフライン再計算を実行します。
+     */
+    bool restoreFromPresetXml(const juce::XmlElement& presetXml);
+
+    /**
+     * @brief 指定されたファイルへ現在の状態をユーザープリセットXMLとして保存します。
+     */
+    bool saveUserPresetToFile(const juce::File& targetFile);
+
+    /**
+     * @brief 指定されたユーザープリセットXMLファイルを読み込み、状態を復元します。
+     */
+    bool loadUserPresetFromFile(const juce::File& sourceFile);
+
+    //==============================================================================
     [[nodiscard]] juce::UndoManager& getUndoManager() noexcept { return undoManager_; }
     [[nodiscard]] juce::AudioProcessorValueTreeState& getAPVTS() noexcept { return apvts_; }
     [[nodiscard]] engine::MidiReharmonizerEngine& getEngine() noexcept { return reharmEngine_; }
@@ -112,6 +149,24 @@ public:
      */
     [[nodiscard]] bool consumeGrooveMapUpdatedFlag() noexcept;
 
+    /**
+     * @brief 外部（D&Dインポート）からカスタムMIDIが読み込まれている状態およびラベル文字列を設定します。
+     */
+    void setCustomSourceMidiState(bool hasCustomMidi, const juce::String& label = {})
+    {
+        hasCustomDroppedMidi_ = hasCustomMidi;
+        customSourceLabel_    = label;
+    }
+
+    [[nodiscard]] bool hasCustomSourceMidi() const noexcept { return hasCustomDroppedMidi_; }
+    [[nodiscard]] const juce::String& getCustomSourceLabel() const noexcept { return customSourceLabel_; }
+
+    /**
+     * @brief v1.5 UI/UX: 現在のDAWまたはAudition再生位置（PPQ）および再生中状態を取得します。
+     */
+    [[nodiscard]] double getCurrentPlayheadPpq() const noexcept { return currentPlayheadPpq_.load(std::memory_order_relaxed); }
+    [[nodiscard]] bool isTransportPlaying() const noexcept { return isTransportPlaying_.load(std::memory_order_relaxed); }
+
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
@@ -137,6 +192,7 @@ private:
     std::atomic<float>* grooveSyncParamPtr_ { nullptr };
     std::atomic<float>* auditionParamPtr_ { nullptr };
     std::atomic<float>* lengthParamPtr_ { nullptr };
+    std::atomic<float>* transposeParamPtr_ { nullptr };
 
     // トランジェント検出用デュアル・エンベロープ・フォロワー状態変数
     double sampleRate_ { 44100.0 };
@@ -150,6 +206,12 @@ private:
     // UI視覚フィードバック用アトミック変数
     std::atomic<float> transientVisualPulse_ { 0.0f };
     std::atomic<bool> grooveMapUpdatedFlag_ { false };
+    std::atomic<double> currentPlayheadPpq_ { -1.0 };
+    std::atomic<bool> isTransportPlaying_ { false };
+
+    // DAW状態保存・復元用のカスタムMIDIフラグおよびラベル
+    bool hasCustomDroppedMidi_ { false };
+    juce::String customSourceLabel_;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(TriLayerReharmAudioProcessor)
 };
