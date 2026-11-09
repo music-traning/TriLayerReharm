@@ -184,8 +184,12 @@ void MidiReharmonizerEngine::setSourceMidiSequence(
 {
     const double safeTpqn = ticksPerQuarterNote > 0.0 ? ticksPerQuarterNote : 960.0;
 
+    // v1.5 フェイルセーフ1: 巨大MIDIファイルD&D時のフリーズ防止用ハードリミット（最大8小節 = 32.0 PPQ、終端NoteOff猶予 = 33.0 PPQ）
+    constexpr double kMaxImportSpanPpq    = 32.0;
+    constexpr double kMaxImportNoteOffPpq = 33.0;
+
     std::vector<TimedMidiEvent> importedEvents;
-    importedEvents.reserve(static_cast<size_t>(sequence.getNumEvents()));
+    importedEvents.reserve(std::min<size_t>(static_cast<size_t>(sequence.getNumEvents()), 2048));
 
     double firstNoteOnPpq = std::numeric_limits<double>::max();
     int importedNoteOnCount = 0;
@@ -211,8 +215,26 @@ void MidiReharmonizerEngine::setSourceMidiSequence(
         const double eventPpq = std::max(0.0, normalizedMsg.getTimeStamp() / safeTpqn);
         if (normalizedMsg.isNoteOn())
         {
-            firstNoteOnPpq = std::min(firstNoteOnPpq, eventPpq);
+            if (firstNoteOnPpq == std::numeric_limits<double>::max())
+            {
+                firstNoteOnPpq = eventPpq;
+            }
+            else
+            {
+                firstNoteOnPpq = std::min(firstNoteOnPpq, eventPpq);
+            }
+
+            // 最初の NoteOn（firstNoteOnPpq）から 8小節（32.0 PPQ）を超える新規 NoteOn はインポートせず切り捨て
+            if ((eventPpq - firstNoteOnPpq) >= kMaxImportSpanPpq)
+                continue;
+
             ++importedNoteOnCount;
+        }
+        else if (firstNoteOnPpq < std::numeric_limits<double>::max())
+        {
+            // 終端の NoteOff 等も firstNoteOnPpq + 33.0 PPQ を超えるものは無視（切り捨て）
+            if ((eventPpq - firstNoteOnPpq) > kMaxImportNoteOffPpq)
+                continue;
         }
 
         TimedMidiEvent ev;
@@ -237,6 +259,17 @@ void MidiReharmonizerEngine::setSourceMidiSequence(
             }
         }
     }
+
+    // オフセット正規化後の 0.0〜32.0 PPQ（NoteOffは最大33.0 PPQ）範囲外イベントを最終クランプ・除去
+    importedEvents.erase(
+        std::remove_if(importedEvents.begin(), importedEvents.end(),
+            [](const TimedMidiEvent& ev)
+            {
+                if (ev.message.isNoteOn())
+                    return ev.ppqPosition >= kMaxImportSpanPpq;
+                return ev.ppqPosition > kMaxImportNoteOffPpq;
+            }),
+        importedEvents.end());
 
     // タイムスタンプ（PPQ）昇順にソート（同一時刻の場合は NoteOff を NoteOn より先に処理）
     std::stable_sort(importedEvents.begin(), importedEvents.end(),
@@ -2471,12 +2504,21 @@ std::vector<ChordBlock> MidiReharmonizerEngine::extractChordProgressionFromCaptu
         return blocks;
 
     // 開始PPQの近いノート（許容誤差 0.20 PPQ = 手弾きのストラム等も同一和音として束ねる）を同一の和音ブロックとしてクラスタリング
+    // v1.5 フェイルセーフ2: Viterbiトレリスの計算爆発を防ぐため、抽出する ChordBlock 数（最大64個）および 8小節（32.0 PPQ）で二重ガード
     constexpr double kChordOnsetTolerancePpq = 0.20;
+    constexpr size_t kMaxExtractedChordBlocks = 64;
+    constexpr double kMaxProgressionSpanPpq   = 32.0;
+
     size_t i = 0;
     while (i < notes.size())
     {
+        if (blocks.size() >= kMaxExtractedChordBlocks || notes[i].startPpq >= kMaxProgressionSpanPpq)
+        {
+            break;
+        }
+
         const double clusterStartPpq = notes[i].startPpq;
-        double clusterEndPpq = notes[i].endPpq;
+        double clusterEndPpq = std::min(notes[i].endPpq, kMaxProgressionSpanPpq);
         int velocitySum = 0;
         int maxPitch = -1;
         int minPitch = 128;
@@ -2485,7 +2527,7 @@ std::vector<ChordBlock> MidiReharmonizerEngine::extractChordProgressionFromCaptu
         while (i < notes.size() && (notes[i].startPpq - clusterStartPpq) <= kChordOnsetTolerancePpq)
         {
             clusterPitches.push_back(notes[i].pitch);
-            clusterEndPpq = std::max(clusterEndPpq, notes[i].endPpq);
+            clusterEndPpq = std::max(clusterEndPpq, std::min(notes[i].endPpq, kMaxProgressionSpanPpq));
             velocitySum += notes[i].velocity;
             maxPitch = std::max(maxPitch, notes[i].pitch);
             minPitch = std::min(minPitch, notes[i].pitch);

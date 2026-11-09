@@ -1,5 +1,5 @@
 # TriLayerReharm v1.5.0 (by Universal Make Associates)
-![TriLayerReharm UI Screenshot](docs/images/hero_image.png)
+![TriLayerReharm UI Screenshot](docs/ogp.jpg)
 
 > **「白玉コードを、インスピレーションの暴風雨に変える。」**
 > TriLayerReharmは、DAW上の退屈なMIDIリージョンを、ジャンル・アーティスト（巨匠シミュレーター）・環境の3層レイヤーで再解釈し、極上のボイシングとグルーヴを持つMIDIデータに再構築するVST3プラグインです。

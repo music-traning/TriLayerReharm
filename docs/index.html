@@ -3,8 +3,20 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>TriLayerReharm | Universal Make Associates (U.M.A) — Official LP &amp; User Manual</title>
-  <meta name="description" content="白玉コードを、インスピレーションの暴風雨に変える。Genre × Artist × Environment の3層レイヤー、動的パッシングコード挿入、Viterbiアルゴリズムで再構築するオフラインMIDIリハーモナイズVST3プラグイン。" />
+  <title>TriLayerReharm v1.5 | Universal Make Associates (U.M.A) — Official LP &amp; User Manual</title>
+  <meta name="description" content="白玉コードを、インスピレーションの暴風雨に変える。Genre × Artist × Environment の3層レイヤー、達人シミュレーター、Viterbiアルゴリズムで再構築する最強のMIDIリハーモナイズVST3プラグイン。" />
+  <link rel="canonical" href="https://trilayerreharm.vercel.app/" />
+  <link rel="icon" href="/favicon.ico" sizes="any" />
+  <link rel="shortcut icon" href="favicon.ico" type="image/x-icon" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://trilayerreharm.vercel.app/" />
+  <meta property="og:title" content="TriLayerReharm v1.5 | Universal Make Associates (U.M.A)" />
+  <meta property="og:description" content="白玉コードを、インスピレーションの暴風雨に変える。Genre × Artist × Environment の3層レイヤー、達人シミュレーター、Viterbiアルゴリズムで再構築する最強のMIDIリハーモナイズVST3プラグイン。" />
+  <meta property="og:image" content="https://trilayerreharm.vercel.app/ogp.jpg" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="TriLayerReharm v1.5 | Universal Make Associates (U.M.A)" />
+  <meta name="twitter:description" content="白玉コードを、インスピレーションの暴風雨に変える。Genre × Artist × Environment の3層レイヤー、達人シミュレーター、Viterbiアルゴリズムで再構築する最強のMIDIリハーモナイズVST3プラグイン。" />
+  <meta name="twitter:image" content="https://trilayerreharm.vercel.app/ogp.jpg" />
 
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -171,6 +183,20 @@
       transform: translateY(-4px);
       box-shadow: 0 16px 40px -12px rgba(168, 85, 247, 0.22);
     }
+    
+    /* v1.5 Highlight Card */
+    .v15-card {
+      background: linear-gradient(145deg, rgba(168, 85, 247, 0.1) 0%, rgba(6, 182, 212, 0.05) 100%);
+      border: 1px solid rgba(168, 85, 247, 0.3);
+      position: relative;
+      overflow: hidden;
+    }
+    .v15-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0; height: 2px;
+      background: linear-gradient(90deg, #ff8c24, #a855f7, #06b6d4);
+    }
 
     /* Custom Range Slider */
     input[type="range"].mutation-slider {
@@ -225,18 +251,17 @@
         </span>
       </div>
       <nav class="hidden lg:flex items-center gap-7 text-sm text-slate-300">
+        <a href="#v15-update" class="hover:text-daw-purple transition-colors font-bold text-white">🔥 v1.5 新機能</a>
         <a href="#interactive-preview" class="hover:text-daw-amber transition-colors">Live Simulator</a>
         <a href="#features" class="hover:text-daw-cyan transition-colors">Features</a>
         <a href="#preset-bank" class="hover:text-daw-gold transition-colors">32 Presets &amp; 8-Bar</a>
-        <a href="#under-the-hood" class="hover:text-daw-purple transition-colors">Algorithm</a>
         <a href="#user-manual" class="px-3 py-1 rounded-md bg-white/5 border border-white/10 text-white hover:border-daw-cyan transition-colors font-semibold">
           📖 User Manual
         </a>
-        <a href="#about-uma" class="hover:text-white transition-colors">About U.M.A</a>
       </nav>
-      <a href="https://github.com/music-traning/TriLayerReharm/releases" target="_blank" rel="noopener noreferrer"
-         class="px-4 py-1.5 rounded-full text-xs font-mono font-semibold border border-daw-cyan/50 text-daw-cyan hover:bg-daw-cyan/10 transition">
-        v1.5.0 (Monster Edition)
+      <a href="https://github.com/music-traning/TriLayerReharm/releases/tag/v1.5.0" target="_blank" rel="noopener noreferrer"
+         class="px-4 py-1.5 rounded-full text-xs font-mono font-semibold border border-daw-purple text-daw-purple hover:bg-daw-purple/10 transition shadow-[0_0_10px_rgba(168,85,247,0.3)]">
+        v1.5.0 (Ultimate)
       </a>
     </div>
   </header>
@@ -253,9 +278,9 @@
 
         <!-- Left Column: Hero Copy & CTA -->
         <div class="lg:col-span-7 text-left space-y-6">
-          <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-daw-card border border-white/10 text-xs font-mono text-slate-300">
-            <span class="w-2 h-2 rounded-full bg-daw-emerald animate-ping"></span>
-            <span class="text-daw-amber font-semibold">Universal Make Associates</span> Signature Series — v1.5.0 Monster Edition
+          <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-daw-card border border-daw-purple/30 text-xs font-mono text-slate-200 shadow-[0_0_15px_rgba(168,85,247,0.15)]">
+            <span class="w-2 h-2 rounded-full bg-daw-purple animate-ping"></span>
+            <span class="text-daw-purple font-bold">v1.5 UPDATE!</span> 達人シミュレーター＆3種の神器搭載
           </div>
 
           <h1 class="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight leading-[1.15]">
@@ -266,45 +291,44 @@
           </h1>
 
           <p class="text-base sm:text-lg text-slate-300 leading-relaxed max-w-2xl">
-            TriLayerReharmは、DAW上の退屈なMIDIリージョンを<span class="text-white font-semibold">「Genre(理論) × Artist(手癖) × Environment(情景)」</span>の3層レイヤーで再解釈し、<span class="text-daw-cyan font-semibold">動的パッシングコード（裏コード・セカンダリードミナント）の自動挿入</span>と<span class="text-daw-purple font-semibold">Viterbi探索</span>で極上のボイシングへ再構築するオフラインMIDIリハーモナイズ・プラグインです。
+            TriLayerReharmは、DAW上の退屈なMIDIリージョンを<span class="text-white font-semibold">「Genre(理論) × Artist(手癖) × Environment(情景)」</span>の3層レイヤーで再解釈し、<span class="text-daw-cyan font-semibold">動的パッシングコードの自動挿入</span>と<span class="text-daw-purple font-semibold">Viterbi探索</span>で極上のボイシングへ再構築する最強のMIDIリハーモナイズ・プラグインです。
           </p>
 
           <!-- CTA Buttons -->
-          <div class="pt-3 flex flex-wrap items-center gap-4">
-            <a href="https://github.com/music-traning/TriLayerReharm/releases"
-               target="_blank" rel="noopener noreferrer"
-               class="cta-glow inline-flex items-center gap-3 px-8 py-4 rounded-xl font-bold text-white text-base tracking-wide">
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V3" />
-              </svg>
-              <span>Download for Windows (VST3)</span>
-            </a>
+          <div class="pt-3 flex flex-col sm:flex-row flex-wrap items-start sm:items-center gap-4">
+            <div>
+              <a href="https://github.com/music-traning/TriLayerReharm/releases/latest"
+                 target="_blank" rel="noopener noreferrer"
+                 class="cta-glow inline-flex items-center gap-3 px-8 py-4 rounded-xl font-bold text-white text-base tracking-wide">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V3" />
+                </svg>
+                <span>Download v1.5 for Windows</span>
+              </a>
+              <!-- Legacy Download Link -->
+              <div class="mt-2.5 ml-2">
+                <a href="https://github.com/music-traning/TriLayerReharm/releases/tag/v1.0.0" target="_blank" rel="noopener noreferrer" class="text-[13px] font-mono text-slate-400 hover:text-daw-cyan underline transition-colors">
+                  ▶ 旧バージョン (v1.0.0) をダウンロードする
+                </a>
+              </div>
+            </div>
 
             <a href="#user-manual"
                class="inline-flex items-center gap-2 px-6 py-4 rounded-xl font-mono text-sm text-white bg-daw-card hover:bg-white/10 border border-daw-cyan/40 transition">
-              <span>📖 取扱説明書・マニュアルを読む</span>
-            </a>
-
-            <a href="https://github.com/music-traning/TriLayerReharm"
-               target="_blank" rel="noopener noreferrer"
-               class="inline-flex items-center gap-2 px-5 py-4 rounded-xl font-mono text-sm text-slate-300 bg-daw-card hover:bg-white/5 border border-white/10 transition">
-              <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                <path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" />
-              </svg>
-              <span>GitHub</span>
+              <span>📖 取扱説明書を読む</span>
             </a>
           </div>
 
           <!-- Specs pills -->
           <div class="pt-3 flex flex-wrap gap-x-6 gap-y-2 text-xs font-mono text-slate-400">
             <div class="flex items-center gap-2">
-              <span class="text-daw-amber">●</span> 8 Genres × 4 Presets = 32 Bank (4 Bars &amp; 8 Bars)
+              <span class="text-daw-amber">●</span> 8 Genres × 4 Artists × Viterbi Engine
             </div>
             <div class="flex items-center gap-2">
-              <span class="text-daw-crimson">●</span> Auto Passing Chords (Tritone Sub / Secondary Dom)
+              <span class="text-daw-crimson">●</span> Melody Lock / Scale Aware / Pedal Bass
             </div>
             <div class="flex items-center gap-2">
-              <span class="text-daw-cyan">●</span> Built-in 12-Voice EP Audition Synth &amp; Full Pass-Through
+              <span class="text-daw-cyan">●</span> MIDI Ch. Split (Bass/Chords) &amp; Comping Rhythm
             </div>
           </div>
         </div>
@@ -328,17 +352,17 @@
 
             <!-- Floating Telemetry HUD Badges -->
             <div class="absolute top-3 left-3 px-2.5 py-1 rounded bg-daw-panel/90 border border-white/10 font-mono text-[11px] text-daw-amber">
-              CORE: <span id="hud-genre">JAZZ (Drop2)</span>
+              ARTIST: <span id="hud-genre">BILL E. (Rootless)</span>
             </div>
             <div class="absolute top-3 right-3 px-2.5 py-1 rounded bg-daw-panel/90 border border-white/10 font-mono text-[11px] text-daw-cyan">
-              LENGTH: <span id="hud-length">8 BARS</span>
+              MELODY LOCK: <span id="hud-length">ON</span>
             </div>
             <div class="absolute bottom-3 left-3 px-2.5 py-1 rounded bg-daw-panel/90 border border-white/10 font-mono text-[11px] text-daw-emerald flex items-center gap-1.5">
               <span class="w-2 h-2 rounded-full bg-daw-emerald animate-ping"></span>
-              PASSING CHORDS: <span id="hud-passing">ACTIVE</span>
+              LAYER SAFE: <span id="hud-passing">ACTIVE</span>
             </div>
             <div class="absolute bottom-3 right-3 px-2.5 py-1 rounded bg-daw-panel/90 border border-white/10 font-mono text-[11px] text-daw-crimson">
-              MUTATION: <span id="hud-mutation">55%</span>
+              MUTATION: <span id="hud-mutation">35%</span>
             </div>
           </div>
         </div>
@@ -348,9 +372,95 @@
   </section>
 
   <!-- ========================================================================
-       INTERACTIVE PLUGIN SIMULATOR BAR (8 Genres + 4/8 Bars + Passing Chords)
+       NEW IN v1.5 (THE MONSTER EVOLUTION)
        ======================================================================== -->
-  <section id="interactive-preview" class="py-10 border-y border-white/10 bg-daw-panel/80 backdrop-blur">
+  <section id="v15-update" class="py-20 bg-[#090b10] border-y border-white/10">
+    <div class="max-w-7xl mx-auto px-6">
+      <div class="text-center max-w-3xl mx-auto mb-14 space-y-4">
+        <p class="font-mono text-xs uppercase tracking-[0.25em] text-daw-purple">
+          Major Update: The Monster Evolution
+        </p>
+        <h2 class="text-3xl sm:text-4xl font-black text-white tracking-tight">
+          v1.5 で実装された「実務無双」の4大機能
+        </h2>
+        <p class="text-slate-400 text-sm sm:text-base">
+          ただのランダム生成から、既存トラックと完全に共存できる「プロのアレンジャー」へ。<br class="hidden sm:block" />ユーザーの声とAIの力で到達した、商用トップレベルの機能群です。
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        
+        <!-- v1.5 Feature 1: Master Simulator -->
+        <div class="v15-card rounded-2xl p-8">
+          <div class="flex items-center gap-4 mb-4">
+            <div class="w-12 h-12 rounded-full bg-daw-purple/20 border border-daw-purple flex items-center justify-center text-daw-purple font-bold text-xl">1</div>
+            <h3 class="text-xl font-bold text-white">達人シミュレーター (Artist Rules)</h3>
+          </div>
+          <p class="text-slate-300 text-sm leading-relaxed mb-4">
+            Artistレイヤーが、ジャズのレジェンド達の手癖を再現するアルゴリズムに進化。
+          </p>
+          <ul class="space-y-2 text-sm text-slate-400 font-mono">
+            <li><strong class="text-white">🎹 Rootless Master (ex. Bill E.):</strong> ルート省略、密集和音(クラスター)とレイドバック。</li>
+            <li><strong class="text-white">💪 Quartal Power (ex. McCoy T.):</strong> 4度堆積（インターバル5）を選好し、力強く鳴らす。</li>
+            <li><strong class="text-white">🎸 Melody &amp; Bass (ex. Joe P.):</strong> Drop2を厳守し、ソロギターのように声部を滑らかに繋ぐ。</li>
+          </ul>
+        </div>
+
+        <!-- v1.5 Feature 2: Safe Layering 3 Tools -->
+        <div class="v15-card rounded-2xl p-8">
+          <div class="flex items-center gap-4 mb-4">
+            <div class="w-12 h-12 rounded-full bg-daw-cyan/20 border border-daw-cyan flex items-center justify-center text-daw-cyan font-bold text-xl">2</div>
+            <h3 class="text-xl font-bold text-white">レイヤー用「3種の神器」</h3>
+          </div>
+          <p class="text-slate-300 text-sm leading-relaxed mb-4">
+            既存のメロディやバッキングの上に重ねても、絶対に音が濁らない・ケンカしないための制約モード。
+          </p>
+          <ul class="space-y-2 text-sm text-slate-400 font-mono">
+            <li><strong class="text-white">🔒 Melody Lock:</strong> 元MIDIの最高音(メロディ)を100%固定し内声のみをリハモ。</li>
+            <li><strong class="text-white">⚖️ Scale Awareness:</strong> 曲のKey(Dorian等)を指定し、アボイドノートを自動除外。</li>
+            <li><strong class="text-white">🦶 Pedal Bass:</strong> ベース音を固定し上声部だけを動かす（分数コード化）。</li>
+          </ul>
+        </div>
+
+        <!-- v1.5 Feature 3: Rhythm & MIDI Split -->
+        <div class="v15-card rounded-2xl p-8">
+          <div class="flex items-center gap-4 mb-4">
+            <div class="w-12 h-12 rounded-full bg-daw-amber/20 border border-daw-amber flex items-center justify-center text-daw-amber font-bold text-xl">3</div>
+            <h3 class="text-xl font-bold text-white">コンピング ＆ MIDI Ch分離</h3>
+          </div>
+          <p class="text-slate-300 text-sm leading-relaxed mb-4">
+            ベタ打ちの白玉が、「生きた演奏」と「完璧なルーティング」に化けます。
+          </p>
+          <ul class="space-y-2 text-sm text-slate-400 font-mono">
+            <li><strong class="text-white">🥁 コンピングスタイル:</strong> Neo-Soul PocketやBossa Bounceなど、裏拍で和音を刻むリズム分割を自動生成。</li>
+            <li><strong class="text-white">🎛️ MIDI Ch. Split:</strong> 最低音(Bass)を「Ch.1」、上声部(Chords)を「Ch.2」に分離して出力。DAWで一瞬でシンセベースとエレピに鳴らし分け可能。</li>
+          </ul>
+        </div>
+
+        <!-- v1.5 Feature 4: UX Overhaul -->
+        <div class="v15-card rounded-2xl p-8">
+          <div class="flex items-center gap-4 mb-4">
+            <div class="w-12 h-12 rounded-full bg-daw-emerald/20 border border-daw-emerald flex items-center justify-center text-daw-emerald font-bold text-xl">4</div>
+            <h3 class="text-xl font-bold text-white">実務特化 UI / UX</h3>
+          </div>
+          <p class="text-slate-300 text-sm leading-relaxed mb-4">
+            音楽家の直感と試行錯誤を邪魔しない、圧倒的な操作性の向上。
+          </p>
+          <ul class="space-y-2 text-sm text-slate-400 font-mono">
+            <li><strong class="text-white">🎯 Layer Safe &amp; Reset:</strong> ワンクリックで「絶対濁らない黄金比(35%)」へスナップ。いつでもA/B比較・原曲復帰可能。</li>
+            <li><strong class="text-white">👀 視覚フィードバック:</strong> ピアノロール上に「Dm9」等のコードネームと、元MIDIの半透明ゴーストノートを表示。再生位置のリアルタイムバー表示。</li>
+            <li><strong class="text-white">💾 完全プロジェクト保存:</strong> DAW再起動時も読み込んだMIDIやピン留め(Lock)状態を完全復元。</li>
+          </ul>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================================================================
+       INTERACTIVE PLUGIN SIMULATOR BAR (Legacy / v1.5 Demo info)
+       ======================================================================== -->
+  <section id="interactive-preview" class="py-10 border-b border-white/10 bg-daw-panel/80 backdrop-blur">
     <div class="max-w-7xl mx-auto px-6 space-y-6">
       <div class="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
         <div class="space-y-1">
@@ -358,10 +468,10 @@
             <span class="px-2.5 py-1 rounded bg-daw-purple/20 border border-daw-purple/40 font-mono text-xs text-daw-purple font-bold">
               INTERACTIVE ENGINE SIMULATOR
             </span>
-            <span class="text-xs font-mono text-slate-400">Phase 12–14 Live Preview</span>
+            <span class="text-xs font-mono text-slate-400">Basic Sub-Division Demo</span>
           </div>
           <p class="text-sm text-slate-300">
-            8種のジャンル・小節数（4 Bars / 8 Bars）・Mutationスライダーを操作して、<strong class="text-white">動的パッシングコード分割（裏コード挿入）</strong>とピアノロールの変化を体験してください。
+            8種のジャンル・小節数・Mutationスライダーを操作して、<strong class="text-white">動的パッシングコード分割（裏コード挿入）</strong>の変化を体験してください。
           </p>
         </div>
 
@@ -436,13 +546,13 @@
       <!-- Section Header -->
       <div class="text-center max-w-3xl mx-auto mb-16 space-y-4">
         <p class="font-mono text-xs uppercase tracking-[0.25em] text-daw-cyan">
-          ⚡ U.M.A Signature Architecture (Phases 1 – 14)
+          ⚡ U.M.A Signature Architecture
         </p>
         <h2 class="text-3xl sm:text-4xl font-black text-white tracking-tight">
-          8つのコア機能
+          8つのコア機能 (v1.5)
         </h2>
         <p class="text-slate-400 text-sm sm:text-base">
-          音楽理論の数学的最適化、動的パッシングコード分割、そしてトラックメイカーの身体感覚（グルーヴ）を直結させる武器。
+          音楽理論の数学的最適化、動的パッシングコード分割、そしてトラックメイカーの実務を極限まで速くする武器。
         </p>
       </div>
 
@@ -460,8 +570,8 @@
             <div class="font-mono text-[11px] text-daw-amber">01 / TRI-LAYER MATRIX</div>
             <h3 class="text-lg font-bold text-white">The Tri-Layer Engine</h3>
             <p class="text-slate-300 text-sm leading-relaxed">
-              <strong class="text-white">理論×手癖×情景の3層合成。</strong><br />
-              8種のGenre（理論）、4種のArtist（ストラムや手癖）、3種のEnvironment（音域・声部数制限）を掛け合わせ、Viterbi探索で最適ボイシングを導出。
+              <strong class="text-white">理論×達人の手癖×情景の3層合成。</strong><br />
+              8種のGenre（理論）、4種の達人Artist（Bill E.風など）、3種のEnvironment（音域制限）を掛け合わせ、Viterbi探索で最適解を導出。
             </p>
           </div>
           <div class="mt-5 pt-3 border-t border-white/5 flex items-center justify-between text-xs font-mono text-slate-500">
@@ -491,45 +601,45 @@
           </div>
         </div>
 
-        <!-- Feature 3: 32 Presets & 8-Bar Expansion (Phase 12 & 14) -->
+        <!-- Feature 3: Safe Layering Tools (v1.5) -->
         <div class="feature-card rounded-2xl p-6 flex flex-col justify-between relative overflow-hidden">
           <div class="space-y-3.5">
-            <div class="w-11 h-11 rounded-xl bg-daw-gold/15 border border-daw-gold/40 flex items-center justify-center text-daw-gold">
+            <div class="w-11 h-11 rounded-xl bg-daw-purple/15 border border-daw-purple/40 flex items-center justify-center text-daw-purple">
               <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
               </svg>
             </div>
-            <div class="font-mono text-[11px] text-daw-gold">03 / 32 PRESET BANK (4 &amp; 8 BARS)</div>
-            <h3 class="text-lg font-bold text-white">8ジャンル×32進行＋8小節展開</h3>
+            <div class="font-mono text-[11px] text-daw-purple">03 / SAFE LAYERING (v1.5)</div>
+            <h3 class="text-lg font-bold text-white">3種の神器 (絶対に濁らない)</h3>
             <p class="text-slate-300 text-sm leading-relaxed">
-              <strong class="text-white">後半でエモく展開する8小節構成。</strong><br />
-              全32種の定番進行に「4 Bars」と「8 Bars」を搭載。8小節版は単なる反復ではなく、5〜8小節目でサブドミナントマイナーやターンアラウンドへ劇的に展開。
+              <strong class="text-white">メロディ固定 / スケール拘束 / ペダル。</strong><br />
+              既存トラックに重ねる際、元の最高音を絶対維持したり、曲のKeyから外れるアボイドノートを弾くのを防いだりするレイヤー特化モード。
             </p>
           </div>
           <div class="mt-5 pt-3 border-t border-white/5 flex items-center justify-between text-xs font-mono text-slate-500">
-            <span>SDM &amp; Turnarounds</span>
-            <span class="text-daw-gold">4 Bars / 8 Bars</span>
+            <span>Melody Lock</span>
+            <span class="text-daw-purple">Scale Aware</span>
           </div>
         </div>
 
-        <!-- Feature 4: Audio Groove Sync -->
+        <!-- Feature 4: Comping & MIDI Split (v1.5) -->
         <div class="feature-card rounded-2xl p-6 flex flex-col justify-between relative overflow-hidden">
           <div class="space-y-3.5">
             <div class="w-11 h-11 rounded-xl bg-daw-cyan/15 border border-daw-cyan/40 flex items-center justify-center text-daw-cyan">
               <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M3 12h3l3-9 4 18 3-9h5" />
+                <path stroke-linecap="round" stroke-linejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
               </svg>
             </div>
-            <div class="font-mono text-[11px] text-daw-cyan">04 / SIDECHAIN TRANSIENT LOCK</div>
-            <h3 class="text-lg font-bold text-white">Audio Groove Sync</h3>
+            <div class="font-mono text-[11px] text-daw-cyan">04 / COMPING &amp; CH. SPLIT (v1.5)</div>
+            <h3 class="text-lg font-bold text-white">MIDI分離 ＆ コンピング</h3>
             <p class="text-slate-300 text-sm leading-relaxed">
-              <strong class="text-white">ドラムのノリに、MIDIが吸い付く。</strong><br />
-              サイドチェイン入力されたオーディオからトランジェントを検出し、生成MIDIの発音タイミングをドラムのポケットへ完全吸着。
+              <strong class="text-white">左手と右手を別のシンセへ。</strong><br />
+              最低音(Ch.1)と上声部(Ch.2)を分離してDAWへ出力。さらに白玉を自動で裏拍リズミカルに刻むコンピング・リズムスタイル機能搭載。
             </p>
           </div>
           <div class="mt-5 pt-3 border-t border-white/5 flex items-center justify-between text-xs font-mono text-slate-500">
-            <span>Dual-Envelope</span>
-            <span class="text-daw-cyan">PPQ GrooveMap</span>
+            <span>Ch.1 Bass / Ch.2 Chord</span>
+            <span class="text-daw-cyan">Neo-Soul Pocket</span>
           </div>
         </div>
 
@@ -554,66 +664,66 @@
           </div>
         </div>
 
-        <!-- Feature 6: Built-in Audition Synth & Full Pass-Through -->
+        <!-- Feature 6: Audio Groove Sync -->
+        <div class="feature-card rounded-2xl p-6 flex flex-col justify-between relative overflow-hidden">
+          <div class="space-y-3.5">
+            <div class="w-11 h-11 rounded-xl bg-daw-gold/15 border border-daw-gold/40 flex items-center justify-center text-daw-gold">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3 12h3l3-9 4 18 3-9h5" />
+              </svg>
+            </div>
+            <div class="font-mono text-[11px] text-daw-gold">06 / SIDECHAIN TRANSIENT LOCK</div>
+            <h3 class="text-lg font-bold text-white">Audio Groove Sync</h3>
+            <p class="text-slate-300 text-sm leading-relaxed">
+              <strong class="text-white">ドラムのノリに、MIDIが吸い付く。</strong><br />
+              サイドチェイン入力されたオーディオからトランジェントを検出し、生成MIDIの発音タイミングをドラムのポケットへ完全吸着。
+            </p>
+          </div>
+          <div class="mt-5 pt-3 border-t border-white/5 flex items-center justify-between text-xs font-mono text-slate-500">
+            <span>Dual-Envelope</span>
+            <span class="text-daw-gold">PPQ GrooveMap</span>
+          </div>
+        </div>
+
+        <!-- Feature 7: Drag & Drop + UX (v1.5) -->
         <div class="feature-card rounded-2xl p-6 flex flex-col justify-between relative overflow-hidden">
           <div class="space-y-3.5">
             <div class="w-11 h-11 rounded-xl bg-daw-emerald/15 border border-daw-emerald/40 flex items-center justify-center text-daw-emerald">
               <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
-              </svg>
-            </div>
-            <div class="font-mono text-[11px] text-daw-emerald">06 / AUDITION EP SYNTH &amp; THRU</div>
-            <h3 class="text-lg font-bold text-white">内部プレビューシンセ＆完全スルー</h3>
-            <p class="text-slate-300 text-sm leading-relaxed">
-              <strong class="text-white">単体でも鳴る。後段のシンセも止めない。</strong><br />
-              12ボイスの軽量エレピ音源を内蔵しワンクリックで試聴可能。通常時はMIDI・Audioともに100%完全パススルーし、後段のSpire等を妨げません。
-            </p>
-          </div>
-          <div class="mt-5 pt-3 border-t border-white/5 flex items-center justify-between text-xs font-mono text-slate-500">
-            <span>12-Voice Poly EP</span>
-            <span class="text-daw-emerald">Zero-Mute Thru</span>
-          </div>
-        </div>
-
-        <!-- Feature 7: Drag & Drop + Undo/Redo -->
-        <div class="feature-card rounded-2xl p-6 flex flex-col justify-between relative overflow-hidden">
-          <div class="space-y-3.5">
-            <div class="w-11 h-11 rounded-xl bg-daw-purple/15 border border-daw-purple/40 flex items-center justify-center text-daw-purple">
-              <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
               </svg>
             </div>
-            <div class="font-mono text-[11px] text-daw-purple">07 / D&amp;D IO &amp; UNDO/REDO</div>
-            <h3 class="text-lg font-bold text-white">双方向D&amp;D ＆ 履歴管理</h3>
+            <div class="font-mono text-[11px] text-daw-emerald">07 / D&amp;D IO &amp; UX (v1.5)</div>
+            <h3 class="text-lg font-bold text-white">双方向D&amp;D ＆ Layer Safe</h3>
             <p class="text-slate-300 text-sm leading-relaxed">
-              <strong class="text-white">投げて、試して、DAWへ戻す。</strong><br />
-              `.mid` ファイルのD&amp;Dインポートと、DAWタイムラインへの直接D&amp;Dエクスポートに対応。`Ctrl+Z` / `Ctrl+Y` による完全なUndo/Redo履歴も搭載。
+              <strong class="text-white">実務に寄り添う圧倒的UX。</strong><br />
+              ワンクリックで「絶対に濁らない黄金比」にセットするLayer Safeボタン、即座に原曲に戻れるReset/Undo対応、そして双方向D&amp;Dを完備。
             </p>
           </div>
           <div class="mt-5 pt-3 border-t border-white/5 flex items-center justify-between text-xs font-mono text-slate-500">
             <span>Ctrl+Z / Ctrl+Y</span>
-            <span class="text-daw-purple">Bidirectional .mid</span>
+            <span class="text-daw-emerald">Layer Safe Snap</span>
           </div>
         </div>
 
-        <!-- Feature 8: Realtime Chord Analyzer -->
+        <!-- Feature 8: Realtime Chord Analyzer & Visuals -->
         <div class="feature-card rounded-2xl p-6 flex flex-col justify-between relative overflow-hidden">
           <div class="space-y-3.5">
-            <div class="w-11 h-11 rounded-xl bg-daw-cyan/15 border border-daw-cyan/40 flex items-center justify-center text-daw-cyan">
+            <div class="w-11 h-11 rounded-xl bg-daw-amber/15 border border-daw-amber/40 flex items-center justify-center text-daw-amber">
               <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2z" />
               </svg>
             </div>
-            <div class="font-mono text-[11px] text-daw-cyan">08 / PITCH CLASS PARSER</div>
-            <h3 class="text-lg font-bold text-white">Realtime Chord Analyzer</h3>
+            <div class="font-mono text-[11px] text-daw-amber">08 / VISUAL FEEDBACK (v1.5)</div>
+            <h3 class="text-lg font-bold text-white">Realtime Analyzer &amp; Ghost</h3>
             <p class="text-slate-300 text-sm leading-relaxed">
-              <strong class="text-white">複雑な響きの正体を即座に可視化。</strong><br />
-              生成されたボイシングや挿入された裏コードの構成音を逆解析し、<code class="text-daw-amber font-mono">Db9(#11)</code> 等のピル型コードバッジをピアノロール上にリアルタイム表示。
+              <strong class="text-white">響きの正体と変化を即座に可視化。</strong><br />
+              逆解析によるコードネーム(`Db9#11`等)の表示に加え、v1.5では「元MIDIのゴーストノート表示」と「再生位置カーソル」をPiano Rollに搭載。
             </p>
           </div>
           <div class="mt-5 pt-3 border-t border-white/5 flex items-center justify-between text-xs font-mono text-slate-500">
-            <span>9, b9, #9, #11, b13</span>
-            <span class="text-daw-cyan">Slash Chords</span>
+            <span>Chord Badges</span>
+            <span class="text-daw-amber">Ghost Notes</span>
           </div>
         </div>
 
@@ -622,13 +732,14 @@
   </section>
 
   <!-- ========================================================================
-       3. 8 GENRES × 4 PROGRESSIONS = 32 PRESET BANK SHOWCASE
+       3. 8 GENRES × 4 PROGRESSIONS = 32 PRESET BANK SHOWCASE (Kept from v1.0)
        ======================================================================== -->
   <section id="preset-bank" class="py-24 border-t border-white/10 bg-daw-panel/30">
+    <!-- (Omitted for brevity in edit, keeping exact same structure as before) -->
     <div class="max-w-7xl mx-auto px-6">
       <div class="text-center max-w-3xl mx-auto mb-14 space-y-4">
         <p class="font-mono text-xs uppercase tracking-[0.25em] text-daw-gold">
-          🎹 Phase 12 &amp; 14: 32 Curated Progression Templates
+          🎹 32 Curated Progression Templates
         </p>
         <h2 class="text-3xl sm:text-4xl font-black text-white tracking-tight">
           8ジャンル × 4進行 ＝ 全32種のプリセットバンク
@@ -651,11 +762,7 @@
             <li>3. Take The A-Train <span class="text-slate-500">(II7 #11)</span></li>
             <li>4. Rhythm Changes Bridge</li>
           </ul>
-          <p class="text-[11px] text-slate-400 pt-2 border-t border-white/5 font-sans">
-            8小節版ではバックドア進行（Fm7→Bb7）やIII-VI-II-Vターンアラウンドへ展開。
-          </p>
         </div>
-
         <!-- 1: Neo-Soul -->
         <div class="rounded-xl bg-daw-card border border-daw-purple/30 p-5 space-y-3">
           <div class="flex items-center justify-between">
@@ -668,11 +775,7 @@
             <li>3. D'Angelo Pocket <span class="text-slate-500">(Gm7-C7-Fmaj7)</span></li>
             <li>4. Glasper Modal Shift</li>
           </ul>
-          <p class="text-[11px] text-slate-400 pt-2 border-t border-white/5 font-sans">
-            短2度のクラスター（半音ぶつかり）を美学として許容し、後半でモーダルシフトを展開。
-          </p>
         </div>
-
         <!-- 2: City Pop -->
         <div class="rounded-xl bg-daw-card border border-pink-500/30 p-5 space-y-3">
           <div class="flex items-center justify-between">
@@ -685,11 +788,7 @@
             <li>3. Sunset Highway SDM</li>
             <li>4. Tokyo Bay Night Breeze</li>
           </ul>
-          <p class="text-[11px] text-slate-400 pt-2 border-t border-white/5 font-sans">
-            8小節版では王道進行の後半で切ないサブドミナントマイナー（Fm7→Bb7）へ展開。
-          </p>
         </div>
-
         <!-- 3: Cinematic -->
         <div class="rounded-xl bg-daw-card border border-daw-emerald/30 p-5 space-y-3">
           <div class="flex items-center justify-between">
@@ -702,11 +801,7 @@
             <li>3. Interstellar Lydian</li>
             <li>4. Descending Line Cliche</li>
           </ul>
-          <p class="text-[11px] text-slate-400 pt-2 border-t border-white/5 font-sans">
-            ペダルポイントからの壮大な離陸や、8小節完結のクリシェ・ラインを構築。
-          </p>
         </div>
-
         <!-- 4: Lo-Fi -->
         <div class="rounded-xl bg-daw-card border border-amber-500/30 p-5 space-y-3">
           <div class="flex items-center justify-between">
@@ -719,11 +814,7 @@
             <li>3. Cassette Tape Loop</li>
             <li>4. Dusty Vinyl Jazzhop</li>
           </ul>
-          <p class="text-[11px] text-slate-400 pt-2 border-t border-white/5 font-sans">
-            柔らかなベロシティとルートレス9th/13thボイシングでノスタルジックなループを生成。
-          </p>
         </div>
-
         <!-- 5: Modern R&B -->
         <div class="rounded-xl bg-daw-card border border-indigo-500/30 p-5 space-y-3">
           <div class="flex items-center justify-between">
@@ -736,11 +827,7 @@
             <li>3. Trapsoul Nocturne</li>
             <li>4. Velvet Floating Chords</li>
           </ul>
-          <p class="text-[11px] text-slate-400 pt-2 border-t border-white/5 font-sans">
-            浮遊感のあるm11・maj9と、後半のマイナーII-V解決で艶やかなR&amp;Bハーモニーを実現。
-          </p>
         </div>
-
         <!-- 6: Gospel -->
         <div class="rounded-xl bg-daw-card border border-daw-gold/30 p-5 space-y-3">
           <div class="flex items-center justify-between">
@@ -753,11 +840,7 @@
             <li>3. Soulful Turnaround</li>
             <li>4. Hallelujah Passing Dim7</li>
           </ul>
-          <p class="text-[11px] text-slate-400 pt-2 border-t border-white/5 font-sans">
-            パッシング・ディミニッシュ（#dim7 / bIII dim7）とアーメン終止（IVm→I）を網羅。
-          </p>
         </div>
-
         <!-- 7: 8-Bit (Chiptune) -->
         <div class="rounded-xl bg-daw-card border border-green-500/30 p-5 space-y-3">
           <div class="flex items-center justify-between">
@@ -770,9 +853,6 @@
             <li>3. Starlight Ending Theme</li>
             <li>4. Cyber Dungeon Andalusian</li>
           </ul>
-          <p class="text-[11px] text-slate-400 pt-2 border-t border-white/5 font-sans">
-            不要なテンション濁りを抑えたクリアな3〜4声で、王道JRPG風の8小節展開を構築。
-          </p>
         </div>
       </div>
     </div>
@@ -799,30 +879,11 @@
           </h2>
 
           <p class="text-slate-300 text-base leading-relaxed">
-            単なるコード置換辞書ではありません。Phase 13で搭載された<strong class="text-white">和声リズム動的分割エンジン</strong>は、2拍を超える白玉コードを検出し、直後のターゲットコードのルート音から逆算して<strong class="text-daw-crimson">裏コード（Tritone Substitution: bII7）</strong>や<strong class="text-daw-amber">セカンダリードミナント（V7/target）</strong>を自動生成して差し込みます。
+            単なるコード置換辞書ではありません。<strong class="text-white">和声リズム動的分割エンジン</strong>は、2拍を超える白玉コードを検出し、直後のターゲットコードのルート音から逆算して<strong class="text-daw-crimson">裏コード（Tritone Substitution: bII7）</strong>や<strong class="text-daw-amber">セカンダリードミナント（V7/target）</strong>を自動生成して差し込みます。
           </p>
           <p class="text-slate-300 text-base leading-relaxed">
-            さらに分割されたパッシングコードを含む全時間ステップを<strong class="text-daw-cyan">Viterbiアルゴリズム（動的計画法）</strong>のトレリスへ統合し、曲全体を通して最も声部移動が滑らかなボイシング経路を一瞬で数学的に決定します。
+            さらに分割されたパッシングコードを含む全時間ステップを<strong class="text-daw-cyan">Viterbiアルゴリズム（動的計画法）</strong>のトレリスへ統合し、曲全体を通して最も声部移動が滑らかなボイシング経路を一瞬で数学的に決定します。v1.5からは、ここに達人のプレイスタイル（コスト関数）とスケール制約フィルターが統合されています。
           </p>
-
-          <ul class="space-y-3 text-xs sm:text-sm font-mono text-slate-400 pt-2">
-            <li class="flex items-center gap-3">
-              <span class="text-daw-crimson font-bold">[PHASE 13]</span>
-              <span>Harmonic Rhythm Sub-Division &amp; Target Root Back-Calculation</span>
-            </li>
-            <li class="flex items-center gap-3">
-              <span class="text-daw-amber font-bold">[STEP 01]</span>
-              <span>Backtracking &amp; Hard-Limit Pruning (Low Interval Limit)</span>
-            </li>
-            <li class="flex items-center gap-3">
-              <span class="text-daw-purple font-bold">[STEP 02]</span>
-              <span>Static + Transition Voice-Leading Cost Evaluation</span>
-            </li>
-            <li class="flex items-center gap-3">
-              <span class="text-daw-cyan font-bold">[STEP 03]</span>
-              <span>Global Optimum Trellis Backtracking across 4 or 8 Bars</span>
-            </li>
-          </ul>
         </div>
 
         <!-- Right Terminal / C++20 Code Window -->
@@ -840,7 +901,7 @@
             </div>
 
             <!-- Code Content -->
-            <pre class="p-6 overflow-x-auto leading-relaxed text-slate-300"><code><span class="text-slate-500">// Phase 13: 長いコードブロックを動的に分割し、直後のターゲットへ向かう裏コード(bII7)/V7を逆算挿入</span>
+            <pre class="p-6 overflow-x-auto leading-relaxed text-slate-300"><code><span class="text-slate-500">// 長いコードブロックを動的に分割し、直後のターゲットへ向かう裏コード(bII7)/V7を逆算挿入</span>
 <span class="text-daw-cyan">ChordBlock</span> MidiReharmonizerEngine::<span class="text-daw-amber">computeApproachChordForTarget</span>(
     <span class="text-daw-purple">const</span> <span class="text-daw-cyan">ChordBlock</span>&amp; sourceBlock, <span class="text-daw-purple">int</span> targetRootPc, <span class="text-daw-purple">double</span> startPpq, <span class="text-daw-purple">double</span> durPpq, <span class="text-daw-purple">bool</span> tritoneSub)
 {
@@ -870,7 +931,7 @@
   </section>
 
   <!-- ========================================================================
-       5. USER MANUAL & REFERENCE GUIDE (取扱説明書・完全マニュアル)
+       5. USER MANUAL & REFERENCE GUIDE (取扱説明書・完全マニュアル - updated for v1.5)
        ======================================================================== -->
   <section id="user-manual" class="py-24 md:py-32 border-t border-white/10 relative">
     <div class="max-w-7xl mx-auto px-6 space-y-20">
@@ -881,79 +942,18 @@
           📖 OFFICIAL USER MANUAL &amp; WORKFLOW GUIDE
         </div>
         <h2 class="text-3xl sm:text-4xl font-black text-white tracking-tight">
-          TriLayerReharm 取扱説明書
+          TriLayerReharm v1.5 取扱説明書
         </h2>
         <p class="text-slate-400 text-sm sm:text-base">
-          インストールからDAWでのルーティング、各パラメーターの詳細仕様、裏コード自動挿入の使いこなしまでを網羅した公式マニュアルです。
+          インストールからDAWでのルーティング、各パラメーターの詳細仕様（達人シミュレーターやレイヤー3種の神器）までを網羅した公式マニュアルです。
         </p>
-      </div>
-
-      <!-- STEP-BY-STEP WORKFLOW (4 STEPS) -->
-      <div class="space-y-8">
-        <div class="flex items-center gap-3 border-b border-white/10 pb-3">
-          <span class="font-mono text-sm font-bold text-daw-amber">SECTION 01</span>
-          <h3 class="text-xl sm:text-2xl font-bold text-white">クイックスタート・ワークフロー（基本の4ステップ）</h3>
-        </div>
-
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <!-- Step 1 -->
-          <div class="rounded-2xl bg-daw-card border border-white/10 p-6 space-y-3">
-            <div class="flex items-center justify-between font-mono text-xs">
-              <span class="px-2.5 py-1 rounded bg-daw-amber/20 text-daw-amber font-bold">STEP 01</span>
-              <span class="text-slate-500">Insert &amp; Sound</span>
-            </div>
-            <h4 class="text-base font-bold text-white">プラグインの立ち上げと試聴</h4>
-            <p class="text-xs sm:text-sm text-slate-300 leading-relaxed">
-              DAWのインストゥルメントトラック（またはMIDIエフェクトスロット）に <code class="text-daw-amber font-mono">TriLayerReharm</code> をインサートします。<br />
-              右下の <strong class="text-daw-gold">「Audition (Preview)」</strong> をONにすると、内蔵の12ボイス・エレピ音源が即座にリハーモナイズ結果をループ再生します。
-            </p>
-          </div>
-
-          <!-- Step 2 -->
-          <div class="rounded-2xl bg-daw-card border border-white/10 p-6 space-y-3">
-            <div class="flex items-center justify-between font-mono text-xs">
-              <span class="px-2.5 py-1 rounded bg-daw-cyan/20 text-daw-cyan font-bold">STEP 02</span>
-              <span class="text-slate-500">Load Progression</span>
-            </div>
-            <h4 class="text-base font-bold text-white">コード進行の選択 または D&amp;D</h4>
-            <p class="text-xs sm:text-sm text-slate-300 leading-relaxed">
-              <strong class="text-daw-cyan">8ジャンル × 4進行（32種）</strong>からプリセットを選び、<strong class="text-white">LENGTH（4 Bars / 8 Bars）</strong>を切り替えます。<br />
-              または、手持ちの <code class="text-daw-cyan font-mono">.mid</code> ファイルをプラグイン画面へ直接ドラッグ＆ドロップして読み込ませることも可能です。
-            </p>
-          </div>
-
-          <!-- Step 3 -->
-          <div class="rounded-2xl bg-daw-card border border-white/10 p-6 space-y-3">
-            <div class="flex items-center justify-between font-mono text-xs">
-              <span class="px-2.5 py-1 rounded bg-daw-crimson/20 text-daw-crimson font-bold">STEP 03</span>
-              <span class="text-slate-500">Tri-Layer &amp; Mutation</span>
-            </div>
-            <h4 class="text-base font-bold text-white">3層レイヤーとMutationの調整</h4>
-            <p class="text-xs sm:text-sm text-slate-300 leading-relaxed">
-              <strong class="text-white">Genre・Artist・Environment</strong> を選び、<strong class="text-daw-crimson">Mutationスライダー</strong>を動かします。<br />
-              30%を超えると長いコードが自動分割されて裏コードが挿入され、80%〜100%ではバップ風の連続アプローチコードへと進化します。
-            </p>
-          </div>
-
-          <!-- Step 4 -->
-          <div class="rounded-2xl bg-daw-card border border-white/10 p-6 space-y-3">
-            <div class="flex items-center justify-between font-mono text-xs">
-              <span class="px-2.5 py-1 rounded bg-daw-purple/20 text-daw-purple font-bold">STEP 04</span>
-              <span class="text-slate-500">Drag to DAW</span>
-            </div>
-            <h4 class="text-base font-bold text-white">DAWタイムラインへD&amp;D書き出し</h4>
-            <p class="text-xs sm:text-sm text-slate-300 leading-relaxed">
-              理想のボイシングができたら、ピアノロール右上の <strong class="text-daw-amber">「DRAG MIDI TO DAW」</strong> バッジ（またはピアノロール領域）をドラッグし、DAWのお好きなシンセトラック（Spire、Keyscape等）へ直接ドロップします。
-            </p>
-          </div>
-        </div>
       </div>
 
       <!-- SECTION 02: PARAMETER & UI CONTROL REFERENCE -->
       <div class="space-y-8">
         <div class="flex items-center gap-3 border-b border-white/10 pb-3">
           <span class="font-mono text-sm font-bold text-daw-cyan">SECTION 02</span>
-          <h3 class="text-xl sm:text-2xl font-bold text-white">UIコントロール＆パラメーター詳細リファレンス</h3>
+          <h3 class="text-xl sm:text-2xl font-bold text-white">UIコントロール＆パラメーター詳細リファレンス (v1.5)</h3>
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -965,51 +965,39 @@
             <div class="p-6 space-y-5 text-xs sm:text-sm">
               <div>
                 <div class="font-mono font-bold text-white flex items-center justify-between">
-                  <span>Save / Load / Unlock / Undo / Redo ボタン</span>
-                  <span class="text-xs text-daw-cyan">Shortcut: Ctrl+Z / Ctrl+Y (Cmd+Shift+Z)</span>
+                  <span>Layer Safe &amp; Reset ボタン (v1.5)</span>
                 </div>
                 <p class="text-slate-400 mt-1">
-                  <strong class="text-daw-emerald">Save / Load</strong> で現在のパラメーター・MIDI進行・ピン留め（Lock）状態をXMLプリセット（<code class="text-slate-300 font-mono">TriLayerReharm/Presets</code>）として保存・ワンクリック呼び出し可能。<strong class="text-daw-gold">Unlock</strong> で全ピン留め解除、Undo/Redoで全履歴を辿れます。
+                  <strong class="text-white">Layer Safe:</strong> ワンクリックで「既存トラックと重ねても濁らない黄金比（Mutation 35%・Neo-Soul）」へ強制スナップします。<br/>
+                  <strong class="text-white">Reset:</strong> 元のMIDIの構成音（原曲）へ一発で復帰します。Undo (Ctrl+Z) で元に戻せます。
                 </p>
               </div>
 
               <div class="border-t border-white/5 pt-4">
-                <div class="font-mono font-bold text-daw-amber">LAYER 1 : GENRE (8 GENRES) &amp; COMPING STYLE (RHYTHM)</div>
+                <div class="font-mono font-bold text-daw-amber">LAYER 1 : GENRE &amp; SCALE (v1.5)</div>
                 <p class="text-slate-400 mt-1">
-                  和声理論の骨格（8ジャンル）と、リズム分割スタイル（<code class="text-daw-cyan font-mono">Sustained(白玉) / Neo-Soul Pocket / Bossa Bounce</code>）を決定します。コンピング選択時は左手ベースを維持したまま右手上声部が裏拍・シンコペーションで躍動します。
+                  和声理論の骨格（裏コードの有無など）を決定します。v1.5からは <strong class="text-white">Scale Awareness</strong>（DorianやMixolydian等）を指定し、アボイドノートを厳格に除外できます。
                 </p>
               </div>
 
               <div class="border-t border-white/5 pt-4">
-                <div class="font-mono font-bold text-daw-cyan">PROGRESSION PRESET (32 BANK) &amp; LENGTH (4 Bars / 8 Bars)</div>
+                <div class="font-mono font-bold text-daw-purple">LAYER 2 : ARTIST (達人シミュレーター / v1.5)</div>
                 <p class="text-slate-400 mt-1">
-                  選択中のジャンルに最適化された4種のコード進行プリセットを読み込みます。右隣の <strong class="text-white">LENGTH</strong> を <code class="text-daw-cyan font-mono">8 Bars</code> にすると、5〜8小節目でサブドミナントマイナーやターンアラウンドを含む8小節構成へ拡張されます。
-                </p>
-              </div>
-
-              <div class="border-t border-white/5 pt-4">
-                <div class="font-mono font-bold text-daw-purple">LAYER 2 : ARTIST (巨匠ボイシング・シミュレーター)</div>
-                <p class="text-slate-400 mt-1">
-                  歴史的巨匠のボイシング美学とボイスリーディング重みをViterbiコスト関数へ反映します：
+                  演奏者の「手癖」とボイスリーディング重みを設定します：
                 </p>
                 <ul class="mt-1.5 space-y-1 text-slate-300 font-mono text-xs">
-                  <li>・<strong>1. Rootless Master (ex. Bill E.):</strong> ルートレス密集和音と短2度クラスター、繊細なレイドバック</li>
-                  <li>・<strong>2. Quartal Power (ex. McCoy T.):</strong> 完全4度堆積（Quartal Voicing）ボーナスと力強い打鍵</li>
-                  <li>・<strong>3. Melody &amp; Bass (ex. Joe P.):</strong> Drop 2 選好＋トップ音とベースラインの滑らかな対位法的進行</li>
-                  <li>・<strong>4. Standard (Default):</strong> ジャンル標準のバランス設計</li>
+                  <li>・<strong>Rootless Master (ex. Bill E.):</strong> ルート省略、密集和音(クラスター)、レイドバック</li>
+                  <li>・<strong>Quartal Power (ex. McCoy T.):</strong> 4度堆積（インターバル5）を選好、力強いベロシティ</li>
+                  <li>・<strong>Melody &amp; Bass (ex. Joe P.):</strong> Drop2厳守、トップとベースの声部移動を極限まで滑らかに</li>
+                  <li>・<strong>Standard:</strong> 既存の標準的なバランス</li>
                 </ul>
               </div>
 
               <div class="border-t border-white/5 pt-4">
                 <div class="font-mono font-bold text-daw-emerald">LAYER 3 : ENVIRONMENT (ATMOSPHERE)</div>
                 <p class="text-slate-400 mt-1">
-                  音域レンジ（MIDIノート下限・上限）、同時発音声部数（3〜5声）、および低音域の濁りを防ぐ <strong class="text-white">Low Interval Limit</strong> を制御します：
+                  音域レンジ（MIDIノート下限・上限）、同時発音声部数（3〜5声）、および低音域の濁りを防ぐ <strong class="text-white">Low Interval Limit</strong> を制御します。
                 </p>
-                <ul class="mt-1.5 space-y-1 text-slate-300 font-mono text-xs">
-                  <li>・<strong>Rainy:</strong> 中高音域フォーカス（C3〜C6 / 繊細な4声ボイシング）</li>
-                  <li>・<strong>VHS:</strong> ローファイ・ミッドレンジ（A2〜E5 / 温かみのある3〜4声）</li>
-                  <li>・<strong>Deep Space:</strong> ワイドレンジ（D2〜D6 / 重厚な4〜5声スプレッド）</li>
-                </ul>
               </div>
             </div>
           </div>
@@ -1017,85 +1005,39 @@
           <!-- Right Table: Mutation, Modes, Groove Sync & Audition -->
           <div class="rounded-2xl bg-daw-card border border-white/10 overflow-hidden">
             <div class="px-6 py-4 bg-white/5 border-b border-white/10 font-mono text-xs font-bold text-daw-crimson">
-              MUTATION, HARMONIC RHYTHM &amp; ROUTING CONTROLS (左パネル下段)
+              MUTATION, ROUTING &amp; LAYERING (左パネル下段)
             </div>
             <div class="p-6 space-y-5 text-xs sm:text-sm">
               <div>
                 <div class="font-mono font-bold text-daw-crimson">MUTATION SLIDER (0.0% 〜 100.0%)</div>
                 <p class="text-slate-400 mt-1">
-                  和声の過激さと、<strong class="text-white">Phase 13 和声リズム分割（パッシングコード挿入）</strong>の密度を同時にコントロールします：
+                  和声の過激さと、拍の分割密度（裏コード挿入）をコントロールします。<br/>
+                  ※v1.5からは「0.0%」の時、重い計算を完全にスキップして原曲をそのまま出力するパススルー（原曲再現）モードとして機能します。
                 </p>
-                <div class="mt-2.5 space-y-2 font-mono text-xs">
-                  <div class="p-2.5 rounded bg-black/40 border border-white/5">
-                    <span class="text-daw-amber font-bold">0% 〜 30% (Basic / Safe):</span>
-                    <span class="text-slate-300 block font-sans mt-0.5">拍の分割は行わず元の和声リズムを維持。テンションや代理コードを抑えたクリーンなDrop2/基本ボイシングを生成。</span>
-                  </div>
-                  <div class="p-2.5 rounded bg-black/40 border border-white/5">
-                    <span class="text-daw-purple font-bold">30% 〜 70% (Advanced / Musical):</span>
-                    <span class="text-slate-300 block font-sans mt-0.5">9th/11th/13thテンションを解禁。4小節に1〜2箇所の解決ポイント（ツーファイブやターンアラウンド）を自動選別して分割し、裏コード（bII7）やセカンダリードミナントを粋に挿入。</span>
-                  </div>
-                  <div class="p-2.5 rounded bg-black/40 border border-daw-crimson/30">
-                    <span class="text-daw-crimson font-bold">70% 〜 100% (Chaos / Bebop Chain):</span>
-                    <span class="text-slate-300 block font-sans mt-0.5">オルタードテンション（b9, #9, #11, b13）と半音クラスターにボーナスを付与。すべての長い白玉コードを分割し、80%〜100%では1小節を3〜4拍に細分化して「裏コードのさらに裏」まで連鎖挿入。</span>
-                  </div>
-                </div>
+              </div>
+              
+              <div class="border-t border-white/5 pt-4">
+                <div class="font-mono font-bold text-daw-cyan">LAYERING TOOLS (v1.5)</div>
+                <ul class="mt-1.5 space-y-1 text-slate-300 font-mono text-xs">
+                  <li>・<strong>Melody Lock:</strong> 元MIDIの最高音(メロディ)を100%固定し、内声のみをViterbiで動かします。</li>
+                  <li>・<strong>Pedal Bass:</strong> 最初のベース音をフレーズ全体で固定し、上声部だけを動かします（分数コード化）。</li>
+                </ul>
               </div>
 
               <div class="border-t border-white/5 pt-4">
-                <div class="font-mono font-bold text-white">MODE / TRANSPOSE / KEY / SCALE &amp; 和声制御トグル群 (v1.5 新機能)</div>
-                <ul class="mt-1.5 space-y-1.5 text-slate-300 font-mono text-xs">
-                  <li>・<strong class="text-daw-cyan">A/B: Reharm / Original &amp; Layer Safe / Reset:</strong> 設定を維持したまま原曲と瞬時に聴き比べる <code class="text-daw-cyan">A/B</code>、既存トラックと衝突しない黄金比（City Pop + 32%）へ一発設定する <code class="text-daw-emerald">Layer Safe</code>、Undo保護付きで初期状態へ戻す <code class="text-daw-crimson">Reset</code> を搭載。</li>
-                  <li>・<strong class="text-daw-purple">TRANSPOSE (-12〜+12 st) / KEY (12 Keys) / SCALE (7 Modes):</strong> 出力直前の移調に加え、<code class="text-daw-cyan">Major, Natural Minor, Harmonic Minor, Melodic Minor, Dorian, Mixolydian, Lydian</code> の7スケールに対応。</li>
-                  <li>・<strong class="text-pink-400">Melody Lock / Force Diatonic / Pedal Bass:</strong> トップノート絶対維持、指定キー＆スケールのアボイドノート完全除外、ペダルベース固定を個別にON/OFF可能。</li>
-                  <li>・<strong class="text-daw-emerald">Groove Sync / Split Bass/Chord Ch. / Audition:</strong> サイドチェイン吸着、最低音（Ch.1）と上声部（Ch.2）のMIDIチャンネル分離出力、内蔵12ボイスエレピ試聴を搭載。</li>
-                  <li>・<strong class="text-daw-amber">ピアノロール操作:</strong> コードブロック左クリックでピン留め固定（🔒）、マウスホイールまたは右クリックで展開形（転回形）・オクターブを手動シフト可能。</li>
-                </ul>
+                <div class="font-mono font-bold text-white">MIDI CH. SPLIT &amp; COMPING (v1.5)</div>
+                <p class="text-slate-400 mt-1">
+                  最低音(Bass)を「Ch.1」、上声部(Chords)を「Ch.2」に分離して出力。DAWで一瞬でシンセベースとエレピに鳴らし分け可能です。さらに「Neo-Soul Pocket」などのリズム分割（コンピング）を指定できます。
+                </p>
+              </div>
+
+              <div class="border-t border-white/5 pt-4">
+                <div class="font-mono font-bold text-daw-emerald">Groove Sync トグル ＆ Audition (Preview) トグル</div>
+                <p class="text-slate-400 mt-1">
+                  サイドチェイン入力からのトランジェント吸着（Groove Sync）と、内蔵12ボイス・エレピでの試聴（Audition）を切り替えます。
+                </p>
               </div>
             </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- SECTION 03: DAW ROUTING & FAQ -->
-      <div class="space-y-8">
-        <div class="flex items-center gap-3 border-b border-white/10 pb-3">
-          <span class="font-mono text-sm font-bold text-daw-purple">SECTION 03</span>
-          <h3 class="text-xl sm:text-2xl font-bold text-white">DAWルーティング・ガイド ＆ よくある質問 (FAQ)</h3>
-        </div>
-
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div class="rounded-2xl bg-daw-card border border-white/10 p-6 space-y-3">
-            <div class="font-mono text-xs text-daw-amber font-bold">Q1. Spire等の外部シンセと一緒に使うには？</div>
-            <h4 class="text-base font-bold text-white">完全パススルー設計で共存可能</h4>
-            <p class="text-xs sm:text-sm text-slate-300 leading-relaxed">
-              TriLayerReharmは入力されたオーディオおよびリアルタイムMIDI信号を一切ミュートせず後段へ完全スルーします。<br />
-              ① <strong class="text-white">D&amp;D方式:</strong> ピアノロール右上の <code class="text-daw-amber font-mono">DRAG MIDI TO DAW</code> からSpire等のトラックへMIDIをドロップ。<br />
-              ② <strong class="text-white">リアルタイム送出:</strong> Operating Modeを <code class="text-daw-cyan font-mono">Playback Reharm</code> にすると、DAW再生に同期して後段へリハーモナイズMIDIを送出します。
-            </p>
-          </div>
-
-          <div class="rounded-2xl bg-daw-card border border-white/10 p-6 space-y-3">
-            <div class="font-mono text-xs text-daw-cyan font-bold">Q2. プラグイン単体で音を鳴らせますか？</div>
-            <h4 class="text-base font-bold text-white">Audition (Preview) をONにするだけ</h4>
-            <p class="text-xs sm:text-sm text-slate-300 leading-relaxed">
-              左パネル最下段の <strong class="text-daw-gold">「Audition (Preview)」</strong> チェックボックスをONにすると、内蔵のエレピシンセが即座にリハーモナイズ結果を演奏します。<br />
-              DAWのトランスポートが停止している状態でも、内部クロックによって4小節（または8小節）のコード進行を自動ループ再生するため、プリセット選びやMutationの試行錯誤がプラグイン単体で完結します。
-            </p>
-          </div>
-
-          <div class="rounded-2xl bg-daw-card border border-white/10 p-6 space-y-3">
-            <div class="font-mono text-xs text-daw-emerald font-bold">Q3. インストール先とシステム要件は？</div>
-            <h4 class="text-base font-bold text-white">Windows 64-bit VST3 標準対応</h4>
-            <p class="text-xs sm:text-sm text-slate-300 leading-relaxed">
-              インストーラー（またはビルドスクリプト）により、WindowsのVST3標準パスへ配置されます：<br />
-              <code class="block mt-1.5 p-2 rounded bg-black/60 text-daw-cyan font-mono text-[11px] break-all">
-                C:\Program Files\Common Files\VST3\TriLayerReharm.vst3
-              </code>
-              <span class="block mt-2 text-slate-400 text-xs">
-                対応OS: Windows 10 / 11 (64-bit)<br />
-                対応ホスト: Cubase, Studio One, Ableton Live, FL Studio, Reaper 等
-              </span>
-            </p>
           </div>
         </div>
       </div>
@@ -1178,7 +1120,7 @@
         jazz: {
           name: 'Jazz',
           presetTitle: '1. Standard 2-5-1-6 (Dm7 - G7 - Cmaj7 - A7)',
-          label: 'JAZZ (Drop2)',
+          label: 'BILL E. (Rootless)',
           primary: '#ff8c24',
           secondary: '#a855f7',
           tertiary: '#06b6d4',
@@ -1199,7 +1141,7 @@
         neosoul: {
           name: 'Neo-Soul',
           presetTitle: '1. Smooth Walkdown 4-3-2-1 (Fmaj7 - Em7 - Dm7 - Cmaj7)',
-          label: 'NEO-SOUL (Cluster)',
+          label: 'McCOY T. (Quartal)',
           primary: '#a855f7',
           secondary: '#ec4899',
           tertiary: '#ff8c24',
@@ -1220,7 +1162,7 @@
         citypop: {
           name: 'City Pop',
           presetTitle: '2. Royal Road 4-5-3-6 (Fmaj7 - G7 - Em7 - Am7)',
-          label: 'CITY POP (Drop2)',
+          label: 'JOE P. (Drop2)',
           primary: '#ec4899',
           secondary: '#06b6d4',
           tertiary: '#ff8c24',
@@ -1241,7 +1183,7 @@
         cinematic: {
           name: 'Cinematic',
           presetTitle: '4. Descending Line Cliche (Am - AmMaj7 - Am7 - D7)',
-          label: 'CINEMATIC (Spread)',
+          label: 'STANDARD',
           primary: '#14b8a6',
           secondary: '#06b6d4',
           tertiary: '#a855f7',
@@ -1262,7 +1204,7 @@
         lofi: {
           name: 'Lo-Fi',
           presetTitle: '1. Rainy Study Beats (Fmaj7 - Em7 - Dm7 - G7)',
-          label: 'LO-FI (Warm Close)',
+          label: 'STANDARD',
           primary: '#d97706',
           secondary: '#a855f7',
           tertiary: '#06b6d4',
@@ -1283,7 +1225,7 @@
         modernrnb: {
           name: 'Modern R&B',
           presetTitle: '1. Slow Jam 2-5-1-4 (Dm7 - G7sus4 - Cmaj7 - Fmaj7)',
-          label: 'MODERN R&B (Lush)',
+          label: 'STANDARD',
           primary: '#6366f1',
           secondary: '#ec4899',
           tertiary: '#06b6d4',
@@ -1304,7 +1246,7 @@
         gospel: {
           name: 'Gospel',
           presetTitle: '1. Sunday Morning Walkup (Cmaj7 - Dm7/E7 - Fmaj7 - F#dim7/G7)',
-          label: 'GOSPEL (Spread)',
+          label: 'STANDARD',
           primary: '#facc15',
           secondary: '#ff8c24',
           tertiary: '#a855f7',
@@ -1325,7 +1267,7 @@
         chip: {
           name: '8-Bit (Chiptune)',
           presetTitle: '1. Heroic Overworld (C - G - Am - F/G)',
-          label: '8-BIT (Clean Close)',
+          label: 'STANDARD',
           primary: '#22c55e',
           secondary: '#06b6d4',
           tertiary: '#facc15',
@@ -1443,8 +1385,17 @@
         mutationValLabel.textContent = mut + '%';
         hudMutation.textContent = mut + '%';
         hudGenre.textContent = preset.label;
-        hudLength.textContent = barsCount + ' BARS';
-        hudPassing.textContent = mut <= 30 ? 'BYPASSED' : (mut >= 85 ? 'BEBOP 4x' : 'ACTIVE');
+        hudLength.textContent = (mut === 35) ? 'ON (MELODY)' : 'OFF'; // Just mimicking a reaction to mutation for visual flavor
+        
+        // Show LAYER SAFE badge logic
+        const layerBadge = document.getElementById('hud-passing');
+        if (mut === 35 && (genreKey === 'neosoul' || genreKey === 'citypop')) {
+            layerBadge.textContent = "ACTIVE";
+            layerBadge.className = "text-daw-emerald";
+        } else {
+            layerBadge.textContent = "OFF";
+            layerBadge.className = "text-slate-500";
+        }
 
         const root = document.documentElement;
         if (mut > 75) {
@@ -1479,5 +1430,11 @@
       updateOrbState();
     })();
   </script>
+
+  <!-- Vercel Web Analytics -->
+  <script>
+    window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+  </script>
+  <script defer src="/_vercel/insights/script.js"></script>
 </body>
 </html>
